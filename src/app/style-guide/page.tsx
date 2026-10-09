@@ -16,7 +16,7 @@ const semanticTokens = ["bg", "surface", "text", "muted", "accent", "border"] as
 
 export default function StyleGuide() {
   return (
-    <main className="canvas py-6 md:py-10">
+    <main id="main-content" tabIndex={-1} className="canvas py-6 md:py-10">
       <div className="editorial-grid pb-6 md:pb-10">
         <div className="col-span-12 md:col-span-8">
           <p className="label mb-3 text-muted">ALTER / Foundation study / 01</p>

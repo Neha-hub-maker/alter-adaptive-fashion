@@ -4,7 +4,7 @@
 
 ALTER is a fictional adaptive fashion and lifestyle brand for a UX design portfolio. Its foundation is minimal, editorial, urban and unisex: bright, airy Day and dark, monochrome Night.
 
-The project includes the foundation, a reusable decorative video component and a temporary `/style-guide` route. There is no homepage, navigation, storefront or other page implementation. `/` intentionally returns 404. Framer Motion and GSAP are installed for later work and are not imported.
+The project includes the foundation, a time-aware hero homepage, an accessible site header, a reusable decorative video component and a temporary `/style-guide` route. Collection and Story are clearly marked placeholders for the next task; product grids and scroll animations are not implemented. Framer Motion and GSAP are installed for later work and are not imported.
 
 ## Development
 
@@ -17,7 +17,7 @@ npm run dev
 
 `npm run dev` and `npm run build` automatically generate optimized images through the `predev` and `prebuild` hooks. Existing WebP files newer than their source JPEGs are skipped, so repeat runs are fast. You can still run `npm run optimize-images` directly.
 
-Open `/style-guide` on the development server. No environment variables, credentials, database or external services are required. Fonts are bundled through `next/font/local`, so development and production builds do not fetch Google Fonts.
+Open `/` for the homepage or `/style-guide` for the design reference. No environment variables, credentials, database or external services are required. Fonts are bundled through `next/font/local`, so development and production builds do not fetch Google Fonts.
 
 ```sh
 npm run lint
@@ -27,7 +27,7 @@ npm test
 npm run test:browser
 ```
 
-`typecheck` generates Next.js route types before running TypeScript. `npm test` checks image and video metadata, combined filters, asset paths and all 48 WebP outputs; run dev, build or the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight theme/accent combinations with axe, preference persistence, keyboard controls, reduced motion, image loading, video playback/fallbacks and a 320px layout. Automated checks complement manual visual and screen-reader review.
+`typecheck` generates Next.js route types before running TypeScript. `npm test` checks time boundaries, phase labels, demo-hour parsing, bootstrap behavior, image/video metadata, combined filters, asset paths and all 48 WebP outputs; run dev, build or the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight theme/accent combinations with axe, the minute clock, preferences and denied storage, the mobile menu's keyboard behavior, reduced motion, image loading, video playback/fallbacks and responsive layouts. Automated checks complement manual visual and screen-reader review.
 
 For production: run `npm run build`, then `npm start`. Vercel's default Next.js build command, `npm run build`, runs `prebuild` automatically, so fresh-clone deployments include the optimized images without a custom build command. Generated WebP files remain ignored by Git; the raw JPEGs remain versioned and unchanged.
 
@@ -62,9 +62,23 @@ Each color also has a `--*-rgb` channel token so Tailwind opacity modifiers work
 
 ### Theme contract
 
-The root `<html>` has `data-theme="day|night"` and `data-accent="petrol|magenta|camel|gold"`. The server defaults are Day/Petrol. An inline script runs before paint to restore valid `alter-theme` and `alter-accent` local-storage values. If no valid theme has been chosen, it consults `prefers-color-scheme` once for the initial mood. There is no ongoing system-theme listener; explicit choices remain in control. Invalid preferences fall back safely; denied storage allows in-memory controls.
+The root `<html>` has `data-theme="day|night"`, `data-theme-mode="auto|day|night"` and `data-accent="petrol|magenta|camel|gold"`. **Auto is the default:** Day from **06:00 through 17:59**, Night from **18:00 through 05:59**, using the visitor's local clock. `prefers-color-scheme` no longer chooses the mood. An inline bootstrap resolves the clock or saved choice before paint; the hero's media visibility also uses these root attributes, so the correct theme appears before hydration.
 
-Native, labeled radio groups provide keyboard behavior and selected state. Controls update the root attributes and persist choices. Color, background-color and border-color transitions last 400ms; `prefers-reduced-motion: reduce` removes them. Background videos also fade in over their posters in 400ms when motion is allowed. No motion-library behavior is implemented.
+Choosing Day or Night saves the override under `alter-theme`; choosing Auto removes that key. `alter-accent` still stores the accent. If storage is denied, choices work in memory for the current page session. The shared store in `src/lib/theme.ts` broadcasts the existing `alter-theme-change` event; `useTheme` is consumed by the header, hero and original controls. Auto re-checks at each minute boundary and when the tab regains focus/visibility. Manual overrides are preserved through those checks. Labels and the live clock update once a minute without continuous screen-reader announcements.
+
+Use `/?hour=9` or `/?hour=19` (also supported on `/style-guide`) to demo Auto at a specific hour. Only integer values **0–23** are accepted; empty, fractional, negative, out-of-range or nonnumeric values are ignored. Manual Day/Night overrides take precedence. The demo affects Auto's theme and phase, while the displayed local time remains the real local time. Return to Auto to see a demo when a manual preference has been saved.
+
+Typed helpers `resolveTheme(hour)` and `getPhaseLabel(hour)` are exported from `src/lib/theme.ts`. Morning is 06:00–11:59, Afternoon 12:00–17:59, Evening 18:00–21:59, and Late 22:00–05:59.
+
+Native, labeled Auto/Day/Night radio groups provide keyboard behavior and selected state. Auto displays its current Day/Night mood. Color, background-color and border-color transitions last 400ms; `prefers-reduced-motion: reduce` removes them. Background videos fade in over their posters in 400ms when motion is allowed; hero mood layers crossfade in 600ms. No motion-library behavior is implemented.
+
+### Header and homepage hero
+
+The sticky, opaque header shares the same mood control with the style guide. Collection and Story link to homepage anchors, including when navigating from the style guide. Below 768px, Menu opens a full-screen native modal dialog with background content made inert, an explicit keyboard focus loop, Escape/Close dismissal, scroll locking and focus restoration. Resizing into desktop navigation also closes the panel. The first focusable element is the Skip to content link.
+
+The Day hero reuses `BackgroundVideo` with `hero-day-street-walk` and the mobile `hero-day-street-walk-portrait` variant, with priority loading. Night uses `texture-blue-silk-loop` with a dark overlay and the optimized `street-night-allwhite` photo on the right from 768px up. Only the active mood video plays; inactive media uses `preload="none"` and retains its last frame for the crossfade. Both media layers use CSS visibility via theme attributes before hydration. Reduced motion switches layers instantly and shows video posters; Save-Data also uses posters. Hero copy stays Ivory over the existing dark gradient, with a worst-case normal-text contrast of 6.97:1. The right-side Night photo is outside the text area.
+
+The hero's phase label follows the effective hour; its clock shows real local time. Its collection button and story link target the two minimal placeholder sections. Those placeholders are explicitly marked in source for replacement in the next task.
 
 ### Typography
 
@@ -121,7 +135,7 @@ import { getVideos } from "@/data/videos";
 
 const textures = getVideos({ role: "texture", mood: "night", orientation: "landscape" });
 
-// Example of future usage; no hero page is implemented.
+// Reusable placement pattern; the homepage implementation is in HomeHero.
 <div className="relative">
   <BackgroundVideo
     id="hero-day-street-walk"
@@ -133,7 +147,7 @@ const textures = getVideos({ role: "texture", mood: "night", orientation: "lands
 </div>
 ```
 
-`BackgroundVideo` accepts `id`, optional `portraitId`, `className`, `overlay` (`none`, `light`, `dark`; default `dark`) and `priority` (default `false`). Below 768px, a supplied portrait ID switches both the clip and poster; a non-portrait alternate is rejected. CSS reserves the correct aspect ratio before hydration. The video is muted, looping, inline, hidden from assistive technology and has no controls or focus stop. It plays only while intersecting the viewport and the document is visible, pauses when hidden, and retains its poster if autoplay is rejected or media fails. The first successful playback fades over the poster. Priority changes video preload from `metadata` to `auto` and makes the poster load eagerly; it does not bypass visibility or preference checks.
+`BackgroundVideo` accepts `id`, optional `portraitId`, `className`, `overlay` (`none`, `light`, `dark`; default `dark`), `priority` (default `false`) and `active` (default `true`). Below 768px, a supplied portrait ID switches both the clip and poster; a non-portrait alternate is rejected. CSS reserves the correct aspect ratio before hydration. The video is muted, looping, inline, hidden from assistive technology and has no controls or focus stop. It plays only while active, intersecting the viewport and the document is visible, pauses when hidden, and retains its poster if autoplay is rejected or media fails. The first successful playback fades over the poster. Priority changes active video preload from `metadata` to `auto` and makes the poster load eagerly; it does not bypass visibility or preference checks. Inactive layers preload no video and retain paused frames for crossfades.
 
 Before preferences are checked, server output contains only the responsive poster. Reduced motion or the browser's Save-Data flag prevents video mounting and MP4 requests. Changes to those preferences are honored while the page is open. A browser without IntersectionObserver retains the poster rather than starting uncontrolled playback.
 
