@@ -4,7 +4,7 @@
 
 ALTER is a fictional adaptive fashion and lifestyle brand for a UX design portfolio. Its foundation is minimal, editorial, urban and unisex: bright, airy Day and dark, monochrome Night.
 
-This task includes only the foundation and a temporary `/style-guide` route. There is no homepage, navigation, storefront, content-section implementation or animation system. `/` intentionally returns 404. Framer Motion and GSAP are installed for later work and are not imported.
+The project includes the foundation, a reusable decorative video component and a temporary `/style-guide` route. There is no homepage, navigation, storefront or other page implementation. `/` intentionally returns 404. Framer Motion and GSAP are installed for later work and are not imported.
 
 ## Development
 
@@ -26,7 +26,7 @@ npm run build
 npm run test:browser
 ```
 
-`typecheck` generates Next.js route types before running TypeScript. `npm test` checks image metadata, combined filters and all 48 WebP outputs; run the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight theme/accent combinations with axe, preference persistence, keyboard controls, reduced motion, image loading and a 320px layout. Automated checks complement manual visual and screen-reader review.
+`typecheck` generates Next.js route types before running TypeScript. `npm test` checks image and video metadata, combined filters, asset paths and all 48 WebP outputs; run the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight theme/accent combinations with axe, preference persistence, keyboard controls, reduced motion, image loading, video playback/fallbacks and a 320px layout. Automated checks complement manual visual and screen-reader review.
 
 For production: run `npm run optimize-images`, `npm run build`, then `npm start`. Generate optimized assets **before** building or deploying; generated WebP files are ignored by Git. The raw JPEGs remain versioned and unchanged.
 
@@ -63,7 +63,7 @@ Each color also has a `--*-rgb` channel token so Tailwind opacity modifiers work
 
 The root `<html>` has `data-theme="day|night"` and `data-accent="petrol|magenta|camel|gold"`. The server defaults are Day/Petrol. An inline script runs before paint to restore valid `alter-theme` and `alter-accent` local-storage values. If no valid theme has been chosen, it consults `prefers-color-scheme` once for the initial mood. There is no ongoing system-theme listener; explicit choices remain in control. Invalid preferences fall back safely; denied storage allows in-memory controls.
 
-Native, labeled radio groups provide keyboard behavior and selected state. Controls update the root attributes and persist choices. Color, background-color and border-color transitions last 400ms; `prefers-reduced-motion: reduce` removes them. These are the only transitions; no motion-library behavior is implemented.
+Native, labeled radio groups provide keyboard behavior and selected state. Controls update the root attributes and persist choices. Color, background-color and border-color transitions last 400ms; `prefers-reduced-motion: reduce` removes them. Background videos also fade in over their posters in 400ms when motion is allowed. No motion-library behavior is implemented.
 
 ### Typography
 
@@ -87,7 +87,7 @@ All sizes use `clamp()` with rem limits. `.label` adds DM Mono, uppercase and `0
 
 ## Image rules
 
-The uploaded archives are asset inputs, not implementation instructions. The 16 requested JPEGs are kept in `public/images/raw/`; the additional video assets are outside this foundation's scope.
+The uploaded archives are asset inputs, not implementation instructions. The 16 requested JPEGs are kept in `public/images/raw/`; clips and matching posters live in `public/video/`.
 
 `npm run optimize-images` uses Sharp to auto-orient each source and output WebP at exactly **800, 1400 and 2200px widths**, preserving aspect ratio, at quality 82. Filenames follow `public/images/optimized/<basename>-<width>.webp`. Processing is sequential with limited Sharp concurrency for modest memory use. The command is repeatable and fails if the raw directory is missing or empty. The 2200px variants necessarily upscale some narrower originals; do not interpret them as additional source detail. The sample gallery uses an 800px source, responsive Next.js Image delivery and a deliberate 4:5 crop; choose an appropriate larger source for larger placements.
 
@@ -101,3 +101,41 @@ const src = optimizedImagePath(references[0].file, 1400);
 ```
 
 Omitted filters match all images; `excludeBranded` defaults to false, so explicitly pass `true` for brand-led selections. The branded references are `flatlay-ribbed-top-denim.jpg`, `product-teal-sneakers.jpg` and `store-cream-blazer-rack.jpg`. The temporary guide intentionally shows product and store references with clear third-party labels; it does not claim they are ALTER products. Avoid branded imagery in future hero, campaign or product placements. Use `bg-gradient-pastel.jpg` sparingly because it is brighter than the brand palette. Do not infer licensing rights from these metadata flags; establish asset permissions before public portfolio publication. Use descriptive alt text for content images and empty alt text for purely decorative usage.
+
+## Asset rules
+
+- Use lowercase, descriptive kebab-case filenames. Videos live at `public/video/<id>.mp4`; every clip requires a matching `public/video/<id>-poster.jpg` with the same framing. Add `-portrait` to the base name for a separate portrait variant.
+- Keep videos at **12 seconds maximum**, suitable for a silent decorative loop.
+- Export **without an audio track**. Muting playback is an additional safeguard, not a substitute for removing audio from the asset.
+- Use **1080p maximum**: up to 1920 × 1080 landscape or 1080 × 1920 portrait. Match the poster to the orientation and avoid letterboxing; the component uses a reserved 16:9 or 9:16 frame with `object-fit: cover`.
+- GitHub's browser/web upload limit is **25 MB per file**. Keep each clip and poster below that limit when uploading through the website; this is a web-upload constraint, not a video-duration limit.
+
+### Video registry and background component
+
+`src/data/videos.ts` exports `videos`, `VideoMetadata`, `VideoMood`, `VideoRole`, `VideoOrientation`, `VideoFilters`, `getVideos()` and `getVideoById()`. Filters are optional and combine with AND; unknown IDs throw a descriptive error. `durationSec` records the creative brief's nominal whole-second durations: the portrait street walk is approximately 9.44 seconds (registered as 10) and the dusk silhouette is approximately 6.76 seconds (registered as 7).
+
+```tsx
+import { BackgroundVideo } from "@/components/background-video";
+import { getVideos } from "@/data/videos";
+
+const textures = getVideos({ role: "texture", mood: "night", orientation: "landscape" });
+
+// Example of future usage; no hero page is implemented.
+<div className="relative">
+  <BackgroundVideo
+    id="hero-day-street-walk"
+    portraitId="hero-day-street-walk-portrait"
+    overlay="dark"
+    priority
+  />
+  <p className="absolute inset-x-0 bottom-0 p-3 text-ivory">Dress for the hour you&apos;re in.</p>
+</div>
+```
+
+`BackgroundVideo` accepts `id`, optional `portraitId`, `className`, `overlay` (`none`, `light`, `dark`; default `dark`) and `priority` (default `false`). Below 768px, a supplied portrait ID switches both the clip and poster; a non-portrait alternate is rejected. CSS reserves the correct aspect ratio before hydration. The video is muted, looping, inline, hidden from assistive technology and has no controls or focus stop. It plays only while intersecting the viewport and the document is visible, pauses when hidden, and retains its poster if autoplay is rejected or media fails. The first successful playback fades over the poster. Priority changes video preload from `metadata` to `auto` and makes the poster load eagerly; it does not bypass visibility or preference checks.
+
+Before preferences are checked, server output contains only the responsive poster. Reduced motion or the browser's Save-Data flag prevents video mounting and MP4 requests. Changes to those preferences are honored while the page is open. A browser without IntersectionObserver retains the poster rather than starting uncontrolled playback.
+
+For overlay text, pair **Ivory text with `dark`** and **Ink text with `light`**, regardless of the theme. Both gradients use existing Ink/Ivory tokens, with minimum opacity chosen to exceed WCAG AA normal-text contrast even over the worst-case white or black frame. Position readable text as a sibling above the decorative component, not inside its `aria-hidden` wrapper. `none` preserves unaltered footage in the motion-library gallery and requires separate contrast treatment if text is added later.
+
+The style guide groups all seven references by Day, Dusk and Night. Its landscape hero demonstrates the responsive portrait alternative; the portrait reference also has its own captioned entry.
