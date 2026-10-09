@@ -1,0 +1,40 @@
+{
+  "name": "alter-adaptive-fashion",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "next typegen && tsc --noEmit",
+    "optimize-images": "node scripts/optimize-images.mjs",
+    "test": "node --test tests/images.test.mjs",
+    "test:browser": "node --test tests/style-guide.browser.test.mjs"
+  },
+  "dependencies": {
+    "framer-motion": "14.0.0",
+    "gsap": "3.15.0",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "autoprefixer": "10.6.1",
+    "axe-core": "4.14.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.0",
+    "playwright-core": "1.64.0",
+    "postcss": "8.5.29",
+    "tailwindcss": "3.4.19",
+    "typescript": "6.0.3"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  }
+}
