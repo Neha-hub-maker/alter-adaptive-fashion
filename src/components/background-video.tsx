@@ -10,6 +10,8 @@ export interface BackgroundVideoProps {
   className?: string;
   overlay?: "none" | "light" | "dark";
   priority?: boolean;
+  /** Pause an inactive media layer while preserving its last frame for a crossfade. */
+  active?: boolean;
 }
 
 type DataConnection = EventTarget & { saveData?: boolean };
@@ -41,7 +43,7 @@ function snapshot() {
 function serverSnapshot() { return "pending:landscape"; }
 function aspect(video: VideoMetadata) { return video.orientation === "portrait" ? "9 / 16" : "16 / 9"; }
 
-function PlaybackVideo({ asset, priority }: { asset: VideoMetadata; priority: boolean }) {
+function PlaybackVideo({ asset, priority, active }: { asset: VideoMetadata; priority: boolean; active: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -54,7 +56,7 @@ function PlaybackVideo({ asset, priority }: { asset: VideoMetadata; priority: bo
     let visible = false;
     let disposed = false;
     const sync = () => {
-      if (visible && document.visibilityState === "visible") {
+      if (active && visible && document.visibilityState === "visible") {
         void video.play().catch(() => {
           // Autoplay can be rejected; leave the poster visible and avoid an unhandled rejection.
           if (!disposed) setPlaying(false);
@@ -76,9 +78,17 @@ function PlaybackVideo({ asset, priority }: { asset: VideoMetadata; priority: bo
       document.removeEventListener("visibilitychange", sync);
       video.removeEventListener("canplay", sync);
       video.pause();
-      // Abort remaining media fetches when a preference or responsive source changes.
-      video.removeAttribute("src");
-      video.load();
+    };
+  }, [asset.src, active]);
+
+  useEffect(() => {
+    const video = ref.current;
+    return () => {
+      // Abort media fetches on unmount/source replacement, retaining frames when
+      // only activity changes. The playback effect restores Strict Mode sources.
+      video?.pause();
+      video?.removeAttribute("src");
+      video?.load();
     };
   }, [asset.src]);
 
@@ -90,7 +100,7 @@ function PlaybackVideo({ asset, priority }: { asset: VideoMetadata; priority: bo
       muted
       loop
       playsInline
-      preload={priority ? "auto" : "metadata"}
+      preload={active ? (priority ? "auto" : "metadata") : "none"}
       aria-hidden="true"
       tabIndex={-1}
       className="background-video-media"
@@ -101,7 +111,7 @@ function PlaybackVideo({ asset, priority }: { asset: VideoMetadata; priority: bo
   );
 }
 
-export function BackgroundVideo({ id, portraitId, className = "", overlay = "dark", priority = false }: BackgroundVideoProps) {
+export function BackgroundVideo({ id, portraitId, className = "", overlay = "dark", priority = false, active = true }: BackgroundVideoProps) {
   const primary = getVideoById(id);
   const portrait = portraitId ? getVideoById(portraitId) : undefined;
   if (portrait && portrait.orientation !== "portrait") {
@@ -121,7 +131,7 @@ export function BackgroundVideo({ id, portraitId, className = "", overlay = "dar
         <Image src={primary.poster} alt="" fill unoptimized loading={priority ? "eager" : "lazy"} className="object-cover" />
       </picture>
       {/* No media element or MP4 request until browser preferences have been checked. */}
-      {mode === "motion" && <PlaybackVideo key={selected.id} asset={selected} priority={priority} />}
+      {mode === "motion" && <PlaybackVideo key={selected.id} asset={selected} priority={priority} active={active} />}
       {overlay !== "none" && <div className="background-video-overlay" data-overlay={overlay} />}
     </div>
   );
