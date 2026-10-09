@@ -103,4 +103,39 @@
   }
   .choice:has(input:checked) { background: var(--text); color: var(--bg); }
   .choice:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 4px; }
+
+  .background-video {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--surface);
+    aspect-ratio: var(--video-aspect);
+  }
+  .background-video-media, .background-video-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+  .background-video-media {
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0ms;
+  }
+  .background-video-media[data-playing="true"] { opacity: 1; }
+  /* Minimum opacity protects text contrast even over a white or black frame.
+     Place Ivory text on dark overlays and Ink text on light overlays. */
+  .background-video-overlay[data-overlay="dark"] {
+    background: linear-gradient(to bottom, rgb(var(--ink-rgb) / 0.72), rgb(var(--ink-rgb) / 0.92));
+  }
+  .background-video-overlay[data-overlay="light"] {
+    background: linear-gradient(to bottom, rgb(var(--ivory-rgb) / 0.8), rgb(var(--ivory-rgb) / 0.94));
+  }
+  @media (width < 768px) {
+    .background-video { aspect-ratio: var(--video-mobile-aspect); }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .background-video-media { transition-duration: 400ms; }
+  }
 }

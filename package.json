@@ -9,7 +9,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "optimize-images": "node scripts/optimize-images.mjs",
-    "test": "node --test tests/images.test.mjs",
+    "test": "node --test tests/images.test.mjs tests/videos.test.mjs",
     "test:browser": "node --test tests/style-guide.browser.test.mjs"
   },
   "dependencies": {

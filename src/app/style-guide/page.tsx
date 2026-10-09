@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { ThemeControls } from "@/components/theme-controls";
 import { getImages, imageCategories, optimizedImagePath } from "@/data/images";
+import { BackgroundVideo } from "@/components/background-video";
+import { getVideos, videoMoods } from "@/data/videos";
 
 export const metadata: Metadata = { title: "ALTER — Style Guide", robots: { index: false, follow: false } };
 
@@ -97,6 +99,36 @@ export default function StyleGuide() {
               </figure>
             );
           })}
+        </div>
+      </section>
+      <section aria-labelledby="motion-title" className="guide-block editorial-grid">
+        <div className="col-span-12 md:col-span-4">
+          <p className="label mb-2 text-muted">05 / Motion library</p>
+          <h2 id="motion-title">A quiet rhythm.</h2>
+          <p className="mt-3 text-small text-muted">Clips play only while visible. With reduced motion or Save-Data enabled, only the poster is shown. All clips are silent and decorative.</p>
+        </div>
+        <div className="col-span-12 space-y-6 md:col-span-8">
+          {videoMoods.map((mood) => (
+            <div key={mood}>
+              <h3 className="mb-3 capitalize">{mood}</h3>
+              <div className="editorial-grid">
+                {getVideos({ mood }).map((video) => (
+                  <figure className="col-span-12 min-w-0 sm:col-span-6" key={video.id}>
+                    <BackgroundVideo
+                      id={video.id}
+                      portraitId={video.id === "hero-day-street-walk" ? "hero-day-street-walk-portrait" : undefined}
+                      overlay="none"
+                    />
+                    <figcaption className="pb-3 pt-2">
+                      <p className="label break-words">{video.id}</p>
+                      <p className="mt-1 text-small text-muted">{video.role} / {video.mood}</p>
+                      {video.id === "hero-day-street-walk" && <p className="mt-1 text-small text-muted">Portrait variant below 768px.</p>}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
       <p className="label border-t pt-3 text-muted">Foundation only / 12 columns / 8px rhythm / 1440px canvas</p>
