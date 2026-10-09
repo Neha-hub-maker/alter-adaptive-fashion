@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run optimize-images",
     "dev": "next dev --hostname 0.0.0.0",
+    "prebuild": "npm run optimize-images",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint . --max-warnings=0",

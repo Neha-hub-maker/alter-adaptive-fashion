@@ -1,4 +1,4 @@
-import { mkdir, readdir } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import sharp from "sharp";
@@ -13,15 +13,33 @@ await mkdir(destination, { recursive: true });
 
 // Sequential images and limited libvips concurrency keep peak memory modest.
 sharp.concurrency(2);
+let created = 0;
+let skipped = 0;
 for (const file of files) {
+  const sourcePath = path.join(source, file);
+  const sourceInfo = await stat(sourcePath);
+  const generatedWidths = [];
   for (const width of widths) {
     const output = `${path.parse(file).name}-${width}.webp`;
-    await sharp(path.join(source, file))
+    const outputPath = path.join(destination, output);
+    let outputInfo;
+    try {
+      outputInfo = await stat(outputPath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    if (outputInfo?.mtimeMs > sourceInfo.mtimeMs) {
+      skipped++;
+      continue;
+    }
+    await sharp(sourcePath)
       .rotate()
       .resize({ width })
       .webp({ quality: 82, effort: 5 })
-      .toFile(path.join(destination, output));
+      .toFile(outputPath);
+    created++;
+    generatedWidths.push(width);
   }
-  console.log(`Optimized ${file}: ${widths.join(', ')}px`);
+  if (generatedWidths.length) console.log(`Optimized ${file}: ${generatedWidths.join(', ')}px`);
 }
-console.log(`Created ${files.length * widths.length} WebP variants.`);
+console.log(`Created ${created} WebP variants; skipped ${skipped} fresh variants.`);
