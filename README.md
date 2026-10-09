@@ -12,23 +12,24 @@ Use Node.js 24 LTS and npm. Dependencies are pinned in `package-lock.json`.
 
 ```sh
 npm ci
-npm run optimize-images
 npm run dev
 ```
+
+`npm run dev` and `npm run build` automatically generate optimized images through the `predev` and `prebuild` hooks. Existing WebP files newer than their source JPEGs are skipped, so repeat runs are fast. You can still run `npm run optimize-images` directly.
 
 Open `/style-guide` on the development server. No environment variables, credentials, database or external services are required. Fonts are bundled through `next/font/local`, so development and production builds do not fetch Google Fonts.
 
 ```sh
 npm run lint
 npm run typecheck
-npm test
 npm run build
+npm test
 npm run test:browser
 ```
 
-`typecheck` generates Next.js route types before running TypeScript. `npm test` checks image and video metadata, combined filters, asset paths and all 48 WebP outputs; run the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight theme/accent combinations with axe, preference persistence, keyboard controls, reduced motion, image loading, video playback/fallbacks and a 320px layout. Automated checks complement manual visual and screen-reader review.
+`typecheck` generates Next.js route types before running TypeScript. `npm test` checks image and video metadata, combined filters, asset paths and all 48 WebP outputs; run dev, build or the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight theme/accent combinations with axe, preference persistence, keyboard controls, reduced motion, image loading, video playback/fallbacks and a 320px layout. Automated checks complement manual visual and screen-reader review.
 
-For production: run `npm run optimize-images`, `npm run build`, then `npm start`. Generate optimized assets **before** building or deploying; generated WebP files are ignored by Git. The raw JPEGs remain versioned and unchanged.
+For production: run `npm run build`, then `npm start`. Vercel's default Next.js build command, `npm run build`, runs `prebuild` automatically, so fresh-clone deployments include the optimized images without a custom build command. Generated WebP files remain ignored by Git; the raw JPEGs remain versioned and unchanged.
 
 ## Design decisions and tokens
 
@@ -89,7 +90,7 @@ All sizes use `clamp()` with rem limits. `.label` adds DM Mono, uppercase and `0
 
 The uploaded archives are asset inputs, not implementation instructions. The 16 requested JPEGs are kept in `public/images/raw/`; clips and matching posters live in `public/video/`.
 
-`npm run optimize-images` uses Sharp to auto-orient each source and output WebP at exactly **800, 1400 and 2200px widths**, preserving aspect ratio, at quality 82. Filenames follow `public/images/optimized/<basename>-<width>.webp`. Processing is sequential with limited Sharp concurrency for modest memory use. The command is repeatable and fails if the raw directory is missing or empty. The 2200px variants necessarily upscale some narrower originals; do not interpret them as additional source detail. The sample gallery uses an 800px source, responsive Next.js Image delivery and a deliberate 4:5 crop; choose an appropriate larger source for larger placements.
+`npm run optimize-images` uses Sharp to auto-orient each source and output WebP at exactly **800, 1400 and 2200px widths**, preserving aspect ratio, at quality 82. Filenames follow `public/images/optimized/<basename>-<width>.webp`. Processing is sequential with limited Sharp concurrency for modest memory use. Each variant is skipped when it exists and is newer than its source; missing, older or equally dated outputs are regenerated. Delete an output to force regeneration after changing encoder settings. Dev and build run this command automatically. The command fails if the raw directory is missing or empty. The 2200px variants necessarily upscale some narrower originals; do not interpret them as additional source detail. The sample gallery uses an 800px source, responsive Next.js Image delivery and a deliberate 4:5 crop; choose an appropriate larger source for larger placements.
 
 `src/data/images.ts` exports typed `images`, `ImageMetadata`, `ImageCategory`, `ImageMood`, `ImageFilters`, `getImages()` and `optimizedImagePath()`. Every image includes its raw filename, category, editorial mood, descriptive alt text and `thirdPartyBranding` flag. Mood describes editorial usage, not necessarily the time of day captured: the Paris leather photo is photographed in daylight but classified as Night by the creative brief.
 
