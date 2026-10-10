@@ -178,6 +178,30 @@
   .choice:has(input:checked) { background: var(--text); color: var(--bg); }
   .choice:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 4px; }
 
+  .filter-choice[aria-pressed="true"], .primary-button { background: var(--text); color: var(--bg); }
+  .primary-button { border: 1px solid var(--text); padding: 16px 24px; }
+  .collection-filters { display: flex; flex-wrap: wrap; gap: 32px; padding: 24px 0; border-block: 1px solid var(--border); }
+  .product-card { min-width: 0; align-self: start; }
+  .product-card-button { display: block; width: 100%; text-align: left; }
+  .product-card-image { display: block; position: relative; aspect-ratio: 4 / 5; background: var(--surface); margin-bottom: 16px; }
+  .product-card-button:hover .font-display { text-decoration: underline; text-underline-offset: 4px; }
+  .quick-view { width: calc(100% - 64px); max-width: 1080px; max-height: calc(100dvh - 64px); margin: auto; padding: 24px; color: var(--text); background: var(--bg); border: 1px solid var(--border); overflow-y: auto; overscroll-behavior: contain; }
+  .quick-view::backdrop { background: rgb(var(--ink-rgb) / 0.72); }
+  .quick-view-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 24px; }
+  .quick-view-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
+  .quick-view-image { position: relative; aspect-ratio: 4 / 5; background: var(--surface); align-self: start; }
+  .quick-view-copy { min-width: 0; }
+  .size-group:focus { outline: 2px solid var(--text); outline-offset: 4px; }
+  .bag-confirmation { min-height: 3em; }
+  @media (min-width: 1024px) {
+    .product-card:first-child { grid-column: span 6 / span 6; grid-row: span 2 / span 2; }
+  }
+  @media (width < 768px) {
+    .quick-view { inset: 0; width: 100%; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; }
+    .quick-view-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+    .quick-view-top { position: sticky; top: -24px; z-index: 1; background: var(--bg); padding-top: 16px; }
+  }
+
   .background-video {
     position: relative;
     overflow: hidden;

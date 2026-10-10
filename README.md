@@ -4,7 +4,7 @@
 
 ALTER is a fictional adaptive fashion and lifestyle brand for a UX design portfolio. Its foundation is minimal, editorial, urban and unisex: bright, airy Day and dark, monochrome Night.
 
-The project includes the foundation, a time-aware hero homepage, an accessible site header, a reusable decorative video component and a temporary `/style-guide` route. Collection and Story are clearly marked placeholders for the next task; product grids and scroll animations are not implemented. Framer Motion and GSAP are installed for later work and are not imported.
+The project includes the foundation, a time-aware hero homepage, an accessible site header, an adaptive concept collection with quick views and a bag counter, a reusable decorative video component and a temporary `/style-guide` route. Story remains a clearly marked placeholder. Checkout, a cart drawer and scroll animations are not implemented. Framer Motion and GSAP are installed for later work and are not imported.
 
 ## Development
 
@@ -27,7 +27,7 @@ npm test
 npm run test:browser
 ```
 
-`typecheck` generates Next.js route types before running TypeScript. `npm test` checks time boundaries, phase labels, demo-hour parsing, bootstrap behavior, image/video metadata, combined filters, asset paths and all 48 WebP outputs; run dev, build or the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight theme/accent combinations with axe, the minute clock, preferences and denied storage, the mobile menu's keyboard behavior, reduced motion, image loading, video playback/fallbacks and responsive layouts. Automated checks complement manual visual and screen-reader review.
+`typecheck` generates Next.js route types before running TypeScript. `npm test` checks time boundaries, phase labels, demo-hour parsing, bootstrap behavior, image/video metadata, product validity (including the no-branded-images rule), combined filters, stable adaptive sorting, USD formatting, asset paths and all 48 WebP outputs; run dev, build or the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight style-guide theme/accent combinations with axe, homepage and quick-view accessibility in both moods, the minute clock, preferences and denied storage, mobile-menu and quick-view keyboard behavior, collection filters and empty states, required sizes, bag persistence, reduced motion, image loading, video playback/fallbacks and responsive layouts. Automated checks complement manual visual and screen-reader review.
 
 For production: run `npm run build`, then `npm start`. Vercel's default Next.js build command, `npm run build`, runs `prebuild` automatically, so fresh-clone deployments include the optimized images without a custom build command. Generated WebP files remain ignored by Git; the raw JPEGs remain versioned and unchanged.
 
@@ -78,7 +78,7 @@ The sticky, opaque header shares the same mood control with the style guide. Col
 
 The Day hero reuses `BackgroundVideo` with `hero-day-street-walk` and the mobile `hero-day-street-walk-portrait` variant, with priority loading. Night uses `texture-blue-silk-loop` with a dark overlay and the optimized `street-night-allwhite` photo on the right from 768px up. Only the active mood video plays; inactive media uses `preload="none"` and retains its last frame for the crossfade. Both media layers use CSS visibility via theme attributes before hydration. Reduced motion switches layers instantly and shows video posters; Save-Data also uses posters. Hero copy stays Ivory over the existing dark gradient, with a worst-case normal-text contrast of 6.97:1. The right-side Night photo is outside the text area.
 
-The hero's phase label follows the effective hour; its clock shows real local time. Its collection button and story link target the two minimal placeholder sections. Those placeholders are explicitly marked in source for replacement in the next task.
+The hero's phase label follows the effective hour; its clock shows real local time. Its collection button targets the concept collection and its story link targets the minimal Story placeholder, explicitly marked in source for replacement in a later task.
 
 ### Typography
 
@@ -99,6 +99,20 @@ All sizes use `clamp()` with rem limits. `.label` adds DM Mono, uppercase and `0
 ### Layout
 
 `.canvas` caps content at 1440px, with 24px mobile and 48px desktop gutters. `.editorial-grid` provides 12 columns, 24px mobile and 32px desktop gaps. The Tailwind spacing scale uses **1 = 8px**, **2 = 16px**, **3 = 24px**, etc.; these differ from Tailwind's default scale. `0` and `px` remain available for resets and 1px rules. Corners are square by default; `rounded-sm` is 2px. Generous space, 1px borders and asymmetric column spans establish the editorial rhythm. Avoid adding arbitrary rounded cards, shadows or extra accent colors.
+
+## Collection
+
+`src/data/products.ts` exports nine fictional `Product` records with `id`, `name`, numeric USD `price`, `category`, Day/Night `mood`, `imageFile`, a short `description`, three `details`, available `sizes` and labelled `colors` (`name` plus an existing palette `token`). Accessories use `["One size"]`; sizes are still explicitly selected. The copy describes imagined garments, while the stock photographs provide editorial references rather than exact product depictions. The collection shows the visible note: **"Concept collection for a portfolio project. Product photography is stock imagery."**
+
+Product images must reference existing entries in `images.ts` with **`thirdPartyBranding: false`**. A unit test enforces this for every record, along with unique IDs, positive prices and valid categories, moods and palette tokens. Do not substitute branded photography when extending the catalog.
+
+`filterProducts({ mood?, category? })` combines optional filters with AND. The Mood and Category controls are independent of the current site theme and show all pieces initially. `sortForTheme(products, theme)` places matching pieces first, preserves the incoming order within both groups and returns a new array. Theme changes immediately update the leading edit and sorting without clearing filters; no card movement or filtering animation is applied. `formatPrice(price)` uses `Intl.NumberFormat` with `en-US` and `USD`.
+
+The collection reuses `.canvas` and the 12-column `.editorial-grid`: two cards across on mobile, three from 768px, and four tracks from 1024px, with the leading card spanning two tracks and two rows on desktop. Each image reserves a 4:5 frame and uses lazy-loaded optimized WebP assets with sizes matched to the grid. The result count is announced politely; an empty result offers Clear filters and restores focus to the All mood control.
+
+Each card opens a native quick-view dialog with the original image description, garment details, labelled colour choices and a required size group. Missing size selection shows an inline error and focuses that group. The modal shares the header's focus-wrap and scroll-lock helpers, closes with Escape, Close or a desktop backdrop click, and returns focus to its opening card. On mobile it fills the viewport and scrolls internally. Successful additions announce the piece and size inside the dialog for five seconds.
+
+The shared bag store in `src/lib/bag.ts` persists `{ version: 1, count, items }` under **`alter-bag`**. Each addition records a `productId`, `size` and palette `colorToken`; adding the same variant twice counts as two items. Restored entries are validated against the catalog, and the count is derived from valid items. Malformed or denied storage falls back to memory for the current page session. Bag counters in the header and mobile menu stay in sync; on the homepage they scroll to Collection. On the style guide they display the count only. This is a portfolio interaction with no checkout or payment flow.
 
 ## Image rules
 
