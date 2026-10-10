@@ -8,11 +8,15 @@ import { durations, stagger } from "@/lib/motion";
 import { useMotionAllowed } from "@/lib/use-motion-allowed";
 import { BackgroundVideo } from "@/components/background-video";
 import { optimizedImagePath } from "@/data/images";
-import { getPhaseLabel } from "@/lib/theme";
+import { phaseSubheads } from "@/lib/adaptation";
+import { useProfile } from "@/lib/profile";
+import { products } from "@/data/products";
 import { useTheme } from "@/lib/use-theme";
 
 export function HomeHero() {
-  const { theme, hour, time } = useTheme();
+  const { theme, time } = useTheme();
+  const { profile, enabled } = useProfile();
+  const lastPiece = products.find((piece) => piece.id === profile.recentlyViewed[0]);
   const ref = useRef<HTMLElement>(null);
   const allowed = useMotionAllowed();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
@@ -34,13 +38,14 @@ export function HomeHero() {
       </motion.div></div>
       <div className="day-hero-wash" aria-hidden="true" />
       <div className="canvas hero-content">
-        <p className="label mb-3 flex flex-wrap items-center gap-2">
-          <span>{hour === undefined ? "Your hour" : getPhaseLabel(hour)} / <span className="day-edit">Day edit</span><span className="night-edit">Night edit</span></span>
+        <p className="label flex flex-wrap items-center gap-2">
+          <span><span className="unknown-phase">Your hour</span>{Object.keys(phaseSubheads).map((phase) => <span key={phase} className="phase-variant" data-phase-name={phase}>{phase}</span>)} / <span className="day-edit">Day edit</span><span className="night-edit">Night edit</span></span>
           <span aria-hidden="true">—</span>
           <time dateTime={time || undefined}>{time || "--:--"}</time><span className="sr-only">local time</span>
         </p>
+        <p className="hero-welcome text-small">{enabled && profile.visitCount > 1 ? `Welcome back${lastPiece ? ` — last viewed: ${lastPiece.name}` : "."}` : ""}</p>
         <h1 id="hero-title" className="hero-headline"><Reveal tag="span" className="block" immediate>Dress for the</Reveal>{" "}<Reveal tag="span" className="block" immediate delay={stagger}>hour you&apos;re in.</Reveal></h1>
-        <Reveal immediate delay={stagger + durations.base} className="mb-4 mt-3 max-w-[45ch]"><p>An adaptive wardrobe for every hour of the city.</p></Reveal>
+        <Reveal immediate delay={stagger + durations.base} className="mb-4 mt-3 max-w-[45ch] hero-subhead"><p><span className="neutral-subhead">An adaptive wardrobe for every hour of the city.</span>{Object.entries(phaseSubheads).map(([phase, copy]) => <span key={phase} className="phase-variant adaptive-subhead" data-phase-name={phase}>{copy}</span>)}</p></Reveal>
         <Reveal immediate delay={stagger * 2 + durations.base} className="flex flex-wrap items-center gap-3">
           <a href="#collection" className="hero-button label">Explore the collection</a>
           <a href="#story" className="text-small underline underline-offset-4">Our story</a>

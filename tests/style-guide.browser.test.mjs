@@ -3,6 +3,8 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { after, before, test } from "node:test";
 import { chromium } from "playwright-core";
+import { clearProfile, recordVisit, recordView } from "../src/lib/profile-model.ts";
+import { products } from "../src/data/products.ts";
 
 const require = createRequire(import.meta.url);
 const base = "http://127.0.0.1:3100";
@@ -50,6 +52,17 @@ test("style guide passes WCAG AA checks in all eight theme/accent combinations",
     assert.equal(await page.locator("body").evaluate((element) => getComputedStyle(element).color), theme === "day" ? "rgb(14, 14, 16)" : "rgb(244, 241, 234)");
     for (const accent of ["petrol", "magenta", "camel", "gold"]) {
       await choose(page, accent);
+      const contrast = await page.locator(".text-accent-text").first().evaluate((element) => {
+        const luminance = (color) => {
+          const channels = color.match(/[\d.]+/g).slice(0, 3).map((value) => { const channel = Number(value) / 255; return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4; });
+          return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+        };
+        const foreground = luminance(getComputedStyle(element).color);
+        const background = luminance(getComputedStyle(document.body).backgroundColor);
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      });
+      assert.ok(contrast >= 4.5, `${theme}/${accent}: ${contrast}`);
+      console.log(`Accent contrast ${theme}/${accent}: ${contrast.toFixed(2)}:1`);
       const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations);
       assert.deepEqual(violations.map((item) => ({ id: item.id, nodes: item.nodes.map((node) => node.target) })), [], `${theme}/${accent}`);
     }
@@ -204,7 +217,9 @@ test("auto advances across both hour boundaries and manual moods remain in contr
   const context = await browser.newContext({ timezoneId: "UTC", reducedMotion: "reduce", colorScheme: "dark" });
   const page = await context.newPage();
   await page.clock.install({ time: new Date("2026-10-09T05:59:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-09T05:59:00Z"));
   await page.goto(`${base}/`);
+  await page.waitForFunction(() => document.querySelector(".hour-picks").dataset.ready === "true");
   assert.equal(await page.locator("html").getAttribute("data-theme"), "night");
   await page.clock.runFor(60_000);
   assert.equal(await page.locator("html").getAttribute("data-theme"), "day");
@@ -285,7 +300,7 @@ test("mobile menu traps keyboard focus, closes with Escape, restores focus and u
   await menu.click();
   await panel.getByRole("link", { name: "Collection", exact: true }).click();
   await page.waitForFunction(() => location.hash === "#collection");
-  assert.equal(await page.locator("dialog").evaluate((element) => element.open), false);
+  assert.equal(await page.locator("#alter-menu-panel").evaluate((element) => element.open), false);
   assert.equal(await page.locator("body").evaluate((element) => element.style.overflow), "");
   await page.close();
 });
@@ -347,15 +362,15 @@ test("collection filters combine, announce results and retain the active edit's 
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`${base}/?hour=9#collection`);
   const collection = page.locator("#collection");
-  const cards = collection.getByRole("button", { name: /^Quick view:/ });
-  await page.waitForFunction(() => document.querySelector(".product-card-button")?.getAttribute("aria-label") === "Quick view: Meridian Overcoat");
+  const cards = collection.locator(".collection-grid").getByRole("button", { name: /^Quick view:/ });
+  await page.waitForFunction(() => document.querySelector(".collection-grid .product-card-button")?.getAttribute("aria-label") === "Quick view: Meridian Overcoat");
   assert.equal(await cards.count(), 9);
   assert.equal(await collection.getByRole("status").textContent(), "9 pieces");
   assert.match(await collection.innerText(), /Day edit leads/i);
   const originalDayOrder = await cards.evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label")));
   assert.deepEqual(originalDayOrder.slice(0, 4), ["Meridian Overcoat", "Daylight Check Blazer", "Column Trouser", "Pearl & Gold Jewellery Edit"].map((name) => `Quick view: ${name}`));
   await page.locator("header").getByRole("radio", { name: "Night", exact: true }).locator("..").click();
-  await page.waitForFunction(() => document.querySelector(".product-card-button")?.getAttribute("aria-label") === "Quick view: Nocturne Leather Jacket");
+  await page.waitForFunction(() => document.querySelector(".collection-grid .product-card-button")?.getAttribute("aria-label") === "Quick view: Nocturne Leather Jacket");
   assert.deepEqual((await cards.evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label")))).slice(0, 5), ["Nocturne Leather Jacket", "Rue Leather Overshirt", "Hush Longline Coat", "Studio Blazer", "Midnight Ivory Set"].map((name) => `Quick view: ${name}`));
   assert.match(await collection.innerText(), /Night edit leads/i);
 
@@ -390,7 +405,7 @@ test("collection filters combine, announce results and retain the active edit's 
 test("quick view handles keyboard focus, required sizes, additions, persistence and dismissal", async () => {
   const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width: 1440, height: 1000 } });
   await page.goto(`${base}/?hour=9#collection`);
-  const card = page.getByRole("button", { name: "Quick view: Studio Blazer", exact: true });
+  const card = page.locator(".collection-grid").getByRole("button", { name: "Quick view: Studio Blazer", exact: true });
   await card.focus();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Studio Blazer", exact: true });
@@ -454,7 +469,7 @@ test("collection geometry, stock images and mobile quick views remain accessible
     await page.waitForFunction((mood) => document.querySelector("#collection .label") && document.documentElement.dataset.theme === mood && document.querySelector("#collection")?.textContent.includes(`${mood === "day" ? "Day" : "Night"} edit leads`), mood);
     const collection = page.locator("#collection");
     const grid = collection.locator(".collection-grid");
-    const imageBoxes = collection.locator(".product-card-image");
+    const imageBoxes = collection.locator(".collection-grid .product-card-image");
     const first = await imageBoxes.nth(0).boundingBox();
     const next = await imageBoxes.nth(1).boundingBox();
     assert.ok(Math.abs(first.width - (next.width * 2 + 32)) < 1);
@@ -473,7 +488,7 @@ test("collection geometry, stock images and mobile quick views remain accessible
     await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
     const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations);
     assert.deepEqual(violations.map((item) => ({ id: item.id, targets: item.nodes.map((node) => node.target) })), [], mood);
-    await collection.getByRole("button", { name: /^Quick view:/ }).first().click();
+    await collection.locator(".collection-grid").getByRole("button", { name: /^Quick view:/ }).first().click();
     const dialog = page.getByRole("dialog");
     await dialog.waitFor({ state: "visible" });
     const bounds = await dialog.boundingBox();
@@ -508,7 +523,7 @@ test("bag works with denied or malformed storage and derives restored count from
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`${base}/?hour=9#collection`);
     await page.waitForFunction((count) => document.querySelector("header")?.textContent.includes(`Bag (${count})`), initialCount);
-    await page.getByRole("button", { name: "Quick view: Pearl & Gold Jewellery Edit", exact: true }).click();
+    await page.locator(".collection-grid").getByRole("button", { name: "Quick view: Pearl & Gold Jewellery Edit", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("radio", { name: "One size", exact: true }).locator("..").click();
     await dialog.getByRole("button", { name: "Add to bag" }).click();
@@ -624,9 +639,9 @@ test("hero reveals, parallax and card focus effects keep their frames and filter
   });
   assert.equal(coverage, true);
   const collection = page.locator("#collection");
-  const card = collection.getByRole("button", { name: "Quick view: Meridian Overcoat", exact: true });
+  const card = collection.locator(".collection-grid").getByRole("button", { name: "Quick view: Meridian Overcoat", exact: true });
   await card.focus();
-  await page.waitForFunction(() => getComputedStyle(document.querySelector(".product-image-scale")).transform.startsWith("matrix(1.04"));
+  await page.waitForFunction(() => getComputedStyle(document.querySelector(".collection-grid .product-image-scale")).transform.startsWith("matrix(1.04"));
   assert.equal(await card.evaluate((element) => getComputedStyle(element).outlineStyle), "solid");
   await collection.getByRole("group", { name: "Mood", exact: true }).getByRole("button", { name: "Night edit" }).click();
   await collection.getByRole("group", { name: "Mood", exact: true }).getByRole("button", { name: "All", exact: true }).click();
@@ -674,4 +689,207 @@ test("Story preserves readable DOM order, pins only desktop media, cleans up and
     assert.equal(await page.locator(".pin-spacer").count(), 0);
     await page.close();
   }
+});
+
+function returningProfile() {
+  let profile = { ...recordVisit(clearProfile(), "2026-10-10T09:00:00.000Z"), visitCount: 3 };
+  for (const product of products.slice(0, 6)) profile = recordView(profile, product);
+  return profile;
+}
+async function savedDevice(page, saved) {
+  await page.addInitScript((saved) => { for (const [key, value] of Object.entries(saved)) localStorage.setItem(key, value); }, saved);
+}
+async function deviceData(page) {
+  return page.evaluate(() => Object.fromEntries(Object.keys(localStorage).sort().map((key) => [key, localStorage.getItem(key)])));
+}
+
+test("hour picks show four explained cards, open quick view and re-rank without entrance animations", async () => {
+  const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width: 1440, height: 1000 } });
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(`${base}/?hour=8`);
+  const rail = page.getByRole("region", { name: "Picked for your hour", exact: true });
+  await page.waitForFunction(() => document.querySelector(".hour-picks").dataset.ready === "true");
+  assert.equal(await rail.getByRole("listitem").count(), 4);
+  assert.match(await rail.getByRole("button", { name: /^Quick view:/ }).first().getAttribute("aria-label"), /Column Trouser/);
+  for (const label of await rail.locator(".recommendation-reason").all()) { assert.equal(await label.isVisible(), true); assert.ok((await label.innerText()).length > 10); }
+  await rail.getByRole("button", { name: "Quick view: Column Trouser", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("dialog").waitFor({ state: "visible" });
+  assert.equal(await page.getByRole("dialog").getByRole("heading", { name: "Column Trouser", exact: true }).count(), 1);
+  await page.keyboard.press("Escape");
+  await rail.getByRole("button", { name: "Quick view: Column Trouser", exact: true }).focus();
+  // Programmatic choice leaves focus in the rail, as an automatic boundary does.
+  await page.locator("header").getByRole("radio", { name: "Night", exact: true }).evaluate((element) => element.click());
+  assert.equal(await rail.getByRole("listitem").count(), 4);
+  assert.equal(await rail.locator(".adaptive-card").evaluateAll((elements) => elements.every((element) => getComputedStyle(element).opacity === "1" && getComputedStyle(element).transform === "none")), true);
+  assert.equal(await page.locator(".collection-grid").getByRole("button", { name: "Quick view: Column Trouser", exact: true }).evaluate((element) => element === document.activeElement), true);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("alter-profile")).recentlyViewed[0]), "column-trouser");
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test("recently viewed, returning copy, session counting and Clear my data work locally", async () => {
+  const context = await browser.newContext({ reducedMotion: "reduce" });
+  const page = await context.newPage();
+  // Seed once: reload must use the actual profile, not re-run a test seed script.
+  await page.goto(`${base}/?hour=14`);
+  await page.waitForFunction(() => document.querySelector(".hour-picks").dataset.ready === "true");
+  await page.evaluate((profile) => { localStorage.setItem("alter-profile", JSON.stringify(profile)); }, returningProfile());
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector(".hero-welcome").textContent.includes("Welcome back"));
+  assert.match(await page.locator(".hero-welcome").innerText(), /Daylight Check Blazer/);
+  assert.equal(await page.locator(".hero-welcome").getAttribute("aria-live"), null);
+  const recent = page.getByRole("region", { name: "Recently viewed", exact: true });
+  assert.equal(await recent.getByRole("listitem").count(), 6);
+  await recent.getByRole("button", { name: "Quick view: Studio Blazer", exact: true }).click();
+  await page.keyboard.press("Escape");
+  assert.match(await recent.getByRole("button", { name: /^Quick view:/ }).first().getAttribute("aria-label"), /Studio Blazer/);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("alter-profile")).visitCount), 3);
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector(".recent-slot").dataset.ready === "true");
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("alter-profile")).visitCount), 3);
+  await page.getByRole("button", { name: "Clear recently viewed", exact: true }).click();
+  assert.equal(await recent.isVisible(), false);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("alter-profile")).recentlyViewed.length), 0);
+  await page.getByRole("button", { name: "Clear my data", exact: true }).click();
+  assert.match(await page.locator(".adaptive-confirmation").innerText(), /cleared from this device/);
+  assert.equal(await page.evaluate(() => localStorage.getItem("alter-profile")), null);
+  assert.equal(await page.locator(".hero-welcome").innerText(), "");
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector(".hour-picks").dataset.ready === "true");
+  assert.equal(await page.evaluate(() => localStorage.getItem("alter-profile")), null);
+  await context.close();
+});
+
+test("personalization Off hides adaptation, records nothing, persists and keeps quick view usable", async () => {
+  const page = await browser.newPage({ reducedMotion: "reduce" });
+  const stored = JSON.stringify(returningProfile());
+  await savedDevice(page, { "alter-profile": stored, "alter-personalization": "off" });
+  await page.goto(`${base}/?hour=8`);
+  const setting = page.getByRole("button", { name: "Personalization: Off", exact: true });
+  await page.waitForFunction(() => document.querySelector(".adaptive-controls button").getAttribute("aria-pressed") === "false");
+  assert.equal(await page.locator(".hour-picks").isVisible(), false);
+  assert.equal(await page.locator(".recent-slot").isVisible(), false);
+  assert.equal(await page.locator("html").getAttribute("data-accent"), "petrol");
+  assert.match(await page.locator(".hero-subhead").innerText(), /An adaptive wardrobe/);
+  await page.locator(".collection-grid").getByRole("button", { name: "Quick view: Meridian Overcoat", exact: true }).click();
+  await page.keyboard.press("Escape");
+  assert.equal(await page.evaluate(() => localStorage.getItem("alter-profile")), stored);
+  assert.equal(await page.evaluate(() => sessionStorage.getItem("alter-visit-counted")), null);
+  await setting.click();
+  await page.getByRole("button", { name: "Personalization: On", exact: true }).waitFor();
+  assert.equal(await page.locator(".hour-picks").isVisible(), true);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("alter-profile")).visitCount), 4);
+  await page.getByRole("button", { name: "Personalization: On", exact: true }).click();
+  assert.equal(await page.evaluate(() => localStorage.getItem("alter-personalization")), "off");
+  await page.getByRole("button", { name: "Clear my data", exact: true }).click();
+  assert.equal(await page.evaluate(() => localStorage.getItem("alter-profile")), null);
+  await page.close();
+});
+
+test("demo dialog is keyboard accessible and temporary views/settings restore real state on exit", async () => {
+  const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width: 1440, height: 1000 } });
+  await savedDevice(page, { "alter-profile": JSON.stringify(returningProfile()), "alter-theme": "day", "alter-accent": "gold" });
+  await page.goto(`${base}/?hour=14`);
+  await page.waitForFunction(() => document.querySelector(".hour-picks").dataset.ready === "true");
+  const before = await deviceData(page);
+  const trigger = page.getByRole("button", { name: "See how ALTER adapts", exact: true });
+  await trigger.focus(); await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "See how ALTER adapts", exact: true });
+  await dialog.waitFor({ state: "visible" });
+  await dialog.getByRole("button", { name: "Close demo panel", exact: true }).focus();
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(await dialog.getByRole("button", { name: "Morning minimalist", exact: true }).evaluate((element) => element === document.activeElement), true);
+  await page.keyboard.press("Escape");
+  assert.equal(await trigger.evaluate((element) => element === document.activeElement), true);
+  await trigger.click(); await dialog.getByRole("button", { name: "Late-night browser", exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "night");
+  assert.equal(await page.locator("html").getAttribute("data-hour"), "23");
+  assert.match(await page.locator(".hero-subhead").innerText(), /late plans/);
+  await page.locator(".collection-grid").getByRole("button", { name: "Quick view: Rue Leather Overshirt", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await page.locator("header").getByRole("radio", { name: "Night", exact: true }).locator("..").click();
+  await page.getByRole("button", { name: "Personalization: On", exact: true }).click();
+  await page.getByRole("button", { name: "Personalization: Off", exact: true }).click();
+  assert.deepEqual(await deviceData(page), before);
+  await page.getByRole("button", { name: "Demo mode: Exit", exact: true }).click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "day");
+  assert.equal(await page.locator("html").getAttribute("data-accent"), "gold");
+  assert.equal(await page.locator(".demo-bar").isVisible(), false);
+  assert.deepEqual(await deviceData(page), before);
+  assert.match(await page.locator(".hero-welcome").innerText(), /Daylight Check Blazer/);
+  assert.equal(await trigger.evaluate((element) => element === document.activeElement), true);
+  await page.close();
+});
+
+test("shareable demo presets bootstrap correct hours without writing saved data or playing initial dusk", async () => {
+  for (const width of [375, 1440]) for (const [preset, hour, mood] of [["first", 14, "day"], ["returning", 14, "day"], ["latenight", 23, "night"], ["morning", 8, "day"]]) {
+    const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width, height: 1000 } });
+    if (width === 375) await page.route("**/*.js", async (route) => { await new Promise((resolve) => setTimeout(resolve, 300)); await route.continue(); });
+    await page.addInitScript(() => {
+      window.demoCLS = 0;
+      new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.demoCLS += entry.value; }).observe({ type: "layout-shift", buffered: true });
+    });
+    const stored = JSON.stringify(returningProfile());
+    await savedDevice(page, { "alter-profile": stored, "alter-personalization": "off", "alter-theme": "night", "alter-accent": "camel" });
+    await page.goto(`${base}/?demo=${preset}&hour=14`);
+    await page.waitForFunction(() => document.querySelector(".hour-picks").dataset.ready === "true");
+    assert.ok(await page.evaluate(() => window.demoCLS) < 0.0001, `Demo CLS ${preset}/${width}: ${await page.evaluate(() => window.demoCLS)}`);
+    assert.equal(await page.locator("html").getAttribute("data-hour"), String(hour));
+    assert.equal(await page.locator("html").getAttribute("data-theme"), mood);
+    assert.equal(await page.locator("html").getAttribute("data-accent"), "camel");
+    assert.equal(await page.locator(".dusk-transition").getAttribute("data-active"), "false");
+    assert.equal(await page.evaluate(() => localStorage.getItem("alter-profile")), stored);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem("alter-visit-counted")), null);
+    await page.getByRole("button", { name: "Demo mode: Exit", exact: true }).click();
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "night");
+    assert.equal(await page.locator(".hour-picks").isVisible(), false);
+    assert.equal(await page.evaluate(() => new URL(location.href).searchParams.has("demo")), false);
+    assert.equal(await page.evaluate(() => localStorage.getItem("alter-profile")), stored);
+    await page.close();
+  }
+});
+
+test("adaptive hydration reserves layout, accents remain accessible and denied storage stays usable", async () => {
+  for (const width of [375, 1440]) {
+    const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width, height: 1000 } });
+    const errors = [];
+    const unexpectedRequests = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => { if (/hydration|hydrated|server.rendered|didn.t match/i.test(message.text())) errors.push(message.text()); });
+    page.on("request", (request) => { if (new URL(request.url()).origin !== base || request.method() !== "GET") unexpectedRequests.push(`${request.method()} ${request.url()}`); });
+    await savedDevice(page, { "alter-profile": JSON.stringify(returningProfile()) });
+    await page.addInitScript(() => {
+      window.adaptiveCLS = 0;
+      new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.adaptiveCLS += entry.value; }).observe({ type: "layout-shift", buffered: true });
+    });
+    await page.goto(`${base}/?hour=8`);
+    await page.waitForFunction(() => document.querySelector(".hour-picks").dataset.ready === "true");
+    assert.ok(await page.evaluate(() => window.adaptiveCLS) < 0.001);
+    const top = await page.locator("#hero-title").evaluate((element) => element.getBoundingClientRect().top);
+    await page.getByRole("button", { name: "Clear my data", exact: true }).click();
+    await page.evaluate(() => scrollTo(0, 0));
+    assert.ok(Math.abs((await page.locator("#hero-title").evaluate((element) => element.getBoundingClientRect().top)) - top) < 1);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
+    const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations);
+    assert.deepEqual(violations.map((item) => ({ id: item.id, targets: item.nodes.map((node) => node.target) })), []);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(unexpectedRequests, []);
+    console.log(`Adaptive initial CLS ${width}: ${await page.evaluate(() => window.adaptiveCLS)}`);
+    await page.screenshot({ path: `/tmp/alter-adaptive-${width}.png` });
+    await page.close();
+  }
+  const page = await browser.newPage({ reducedMotion: "reduce" });
+  await page.addInitScript(() => { Object.defineProperty(window, "localStorage", { get() { throw new Error("denied"); } }); Object.defineProperty(window, "sessionStorage", { get() { throw new Error("denied"); } }); });
+  await page.goto(`${base}/?hour=8`);
+  await page.locator(".collection-grid").getByRole("button", { name: "Quick view: Column Trouser", exact: true }).click();
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".recent-slot").isVisible(), true);
+  await page.getByRole("button", { name: "Personalization: On", exact: true }).click();
+  assert.equal(await page.locator(".recent-slot").isVisible(), false);
+  await page.getByRole("button", { name: "Clear my data", exact: true }).click();
+  assert.match(await page.locator(".adaptive-confirmation").innerText(), /cleared for this page/);
+  await page.close();
 });

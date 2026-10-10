@@ -4,7 +4,7 @@
 
 ALTER is a fictional adaptive fashion and lifestyle brand for a UX design portfolio. Its foundation is minimal, editorial, urban and unisex: bright, airy Day and dark, monochrome Night.
 
-The project includes the foundation, a time-aware hero homepage, an accessible site header, an adaptive concept collection with quick views and a bag counter, a motion system, a three-beat Story, a small footer and a temporary `/style-guide` route. Framer Motion handles UI entrances and parallax; GSAP ScrollTrigger is deferred until the desktop Story needs media pinning.
+The project includes the foundation, a time-aware hero homepage, an accessible site header, an adaptive concept collection with quick views and a bag counter, device-local recommendations and demo presets, a motion system, a three-beat Story, a small footer and a temporary `/style-guide` route. Framer Motion handles UI entrances and parallax; GSAP ScrollTrigger is deferred until the desktop Story needs media pinning.
 
 ## Development
 
@@ -129,6 +129,44 @@ Story keeps all three text beats in normal DOM and reading order. Desktop pins o
 `BackgroundVideo` now shares motion preferences and a visibility coordinator. Non-priority clips defer their source until selected in the viewport. Of active, visible decorative clips, the one closest to the viewport centre plays; the others pause, retaining their frames. The smaller Story insert takes priority when at least 60% visible, so the pinned background pauses during that beat. Dusk temporarily pauses other footage. Visibility changes, responsive replacements and unmounts clean up observers, playback entries and animation-frame work. Posters remain the fallback for failed or rejected playback.
 
 The browser suite covers first-load exclusion and midpoint timing for dusk, automatic hour boundaries, rapid toggles, failed media, preference persistence/denied storage, reduced-motion final states, parallax coverage, card focus, Story reading order, trigger cleanup and CLS. `node scripts/check-hero-contrast.mjs` is an optional audit requiring ffmpeg; temporary decoded frames are removed automatically. See [the baseline performance comparison and CLS measurements](docs/motion-performance.md).
+
+## Adaptive system
+
+Adaptation runs on this device. It adds no analytics, tracking, accounts, remote recommendation service or requests that send profile data. Existing site assets and page navigation still load normally. **Personalization defaults to On**; the footer button persists `on`/`off` under `alter-personalization`. Off records no visits or views, hides recommendations/recently viewed/welcome copy, uses the original subhead and disables phase-default accents. Existing saved history stays dormant until enabled again or explicitly cleared. Core Auto/Day/Night theme behavior and a manual accent remain available.
+
+`src/lib/profile.ts` exposes the hydration-safe `useProfile()` store and re-exports the pure `recordVisit`, `recordView`, `clearProfile` and `sanitizeProfile` reducers. Version 1 of **`alter-profile`** stores visit count, canonical ISO `lastVisitAt`, up to 12 unique known product IDs newest first, category/mood view counts and a bounded `viewedAtVisit` map for freshness. The never-visited state has an empty date. Unknown versions or corrupt required fields reset cleanly; unknown IDs/keys, invalid counters and invalid visit indices are removed or sanitized. Counters cap at one million. There is no user identifier, location or inferred demographic data.
+
+A visit is counted once per browser-tab session using **`alter-visit-counted`** in `sessionStorage`. Reloads and client navigation do not count again. Opening quick view from any card records a view; affinities count openings, while the recent list deduplicates IDs. If storage is unavailable, preferences and the profile work in memory for the current page session; a reload cannot retain that memory. Server output and the first client render use a neutral profile, then the shared store loads after mount. The before-paint script reserves the recent strip using sanitized presence only; fixed image, caption and hero-copy slots prevent hydration shifts and hide pending recommendation content.
+
+`scoreProduct(product, { profile, theme, hour })` adds **100** for the active mood, up to **30** for category affinity normalized against the visitor's most-viewed category, up to **10** for similarly normalized mood affinity, and **5** for a static hourly category (Morning trousers, Afternoon suiting, Evening outerwear, Late sets). A piece viewed in the current or previous counted visit loses **8** points. The visit index expires that penalty after two visits. `recommendProducts` sorts a copy, retains the original catalog order on score ties and returns visible, human-readable reasons. "Popular for this hour" is a static editorial fallback, not a popularity metric. The four-card **Picked for your hour** rail appears on first visits too, independently of the main grid's filters, and updates without entrance animation. All cards share `ProductCard` and `QuickView`; disappearing recommendation triggers restore focus to the matching grid card or collection heading.
+
+Returning visits get a quiet, non-live "Welcome back" line with the last viewed piece when available. Morning/Afternoon/Evening/Late subheads follow the existing hour and `?hour=0..23` Auto demo rules. Before a manual accent choice, their defaults are **gold / petrol / camel / magenta**. A valid saved `alter-accent` or an in-memory manual choice always wins. Accessible accent text variants and foregrounds are reused in both themes. Accent colour changes alone use the existing 400ms transition; theme commits switch those colours immediately to avoid an intermediate contrast loss. Reduced motion and Motion: Off make these changes instant.
+
+Measured accent-text contrast against the theme background (WCAG sRGB luminance, browser-computed colours):
+
+| Accent | Day | Night |
+| --- | ---: | ---: |
+| Petrol | 6.82:1 | 9.16:1 |
+| Magenta | 7.56:1 | 8.34:1 |
+| Camel | 6.84:1 | 5.14:1 |
+| Gold | 5.94:1 | 8.04:1 |
+
+All exceed 4.5:1 for normal text. Chromium checks measured **0 initial CLS** for the returning-profile layouts at 375px and 1440px, plus 0 in the existing desktop/mobile Story runs. These are local lab observations, not field performance measurements.
+
+The recent strip shows up to six pieces with semantic list markup. **Clear recently viewed** clears that list and its freshness indices while retaining affinities and visit count. **Clear my data** removes `alter-profile` immediately and confirms it in a polite live region; it leaves the bag and explicit theme/motion/personalization settings alone. If device storage denies removal, the memory profile clears immediately and the confirmation explicitly says it cleared this page only. The session flag remains, so clearing data does not immediately record another visit on reload. To reset the entire adaptation preference, also remove `alter-personalization` in browser storage; removing `alter-accent` restores automatic phase accents on the next load.
+
+**See how ALTER adapts** opens a keyboard-accessible native dialog with four temporary presets:
+
+| Preset / URL | Preview |
+| --- | --- |
+| First visit / `?demo=first` | Empty profile, current effective Auto hour |
+| Returning, outerwear fan / `?demo=returning` | Three visits, repeated outerwear views |
+| Late-night browser / `?demo=latenight` | Hour 23, Night leads, several Night pieces viewed |
+| Morning minimalist / `?demo=morning` | Hour 8, Day leads, trousers and blazers viewed |
+
+Preset hours take precedence over `?hour`; presets without a forced hour use that parameter or local time. Demo mode temporarily enables adaptation even if the real setting is Off. Its views, clearing, personalization and theme/accent choices stay in memory. A **Demo mode: Exit** bar restores the original profile and saved/manual theme, accent and personalization choice, resumes the live clock, and removes only `demo` from the URL. Direct demo links do not count a real visit or write a session flag. Demo preview does not change the existing real bag or motion control: intentional bag additions and motion choices still work as their normal explicit actions.
+
+Unit and browser tests cover sanitation, session counting, corrupt/denied storage, scoring/ties/reasons, Off recording nothing, preset isolation and URL bootstrap, manual accents, recommendations, recently viewed/reset controls, keyboard focus, neutral hydration and CLS. The existing style-guide axe checks exercise all eight theme/accent combinations.
 
 ## Image rules
 

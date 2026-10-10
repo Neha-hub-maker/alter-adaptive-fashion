@@ -5,6 +5,8 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { DuskTransition } from "@/components/dusk-transition";
 import { motionBootstrap } from "@/lib/motion";
+import { profileBootstrap } from "@/lib/profile-model";
+import { DemoBar } from "@/components/adaptive-controls";
 import "./globals.css";
 
 const display = localFont({ src: "../fonts/InstrumentSerif-Regular.ttf", variable: "--font-display", weight: "400", display: "swap" });
@@ -19,8 +21,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-theme="day" data-theme-mode="auto" data-accent="petrol" data-motion="off" suppressHydrationWarning>
-      <head><script dangerouslySetInnerHTML={{ __html: themeBootstrap + motionBootstrap }} /></head>
-      <body className={`${display.variable} ${body.variable} ${label.variable}`}><SiteHeader />{children}<SiteFooter /><DuskTransition /></body>
+      <head><script dangerouslySetInnerHTML={{ __html: themeBootstrap + motionBootstrap + profileBootstrap }} /></head>
+      <body className={`${display.variable} ${body.variable} ${label.variable}`}><SiteHeader />{children}<SiteFooter /><DemoBar /><DuskTransition /></body>
     </html>
   );
 }

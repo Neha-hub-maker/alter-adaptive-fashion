@@ -11,7 +11,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "optimize-images": "node scripts/optimize-images.mjs",
-    "test": "node --test tests/images.test.mjs tests/videos.test.mjs tests/theme.test.mjs tests/products.test.mjs tests/motion.test.mjs",
+    "test": "node --test tests/images.test.mjs tests/videos.test.mjs tests/theme.test.mjs tests/products.test.mjs tests/motion.test.mjs tests/profile.test.mjs tests/personalization.test.mjs",
     "test:browser": "node --test tests/style-guide.browser.test.mjs"
   },
   "dependencies": {
