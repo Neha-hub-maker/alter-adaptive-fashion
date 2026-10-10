@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Image from "next/image";
 import { ThemeControls } from "@/components/theme-controls";
 import { getImages, imageCategories, optimizedImagePath } from "@/data/images";
 import { BackgroundVideo } from "@/components/background-video";
 import { getVideos, videoMoods } from "@/data/videos";
 
-export const metadata: Metadata = { title: "ALTER — Style Guide", robots: { index: false, follow: false } };
+export const metadata: Metadata = { ...pageMetadata("Style guide", "/style-guide", "The ALTER portfolio design reference: tokens, typography, Day/Night moods and the motion library."), robots: { index: false, follow: false } };
 
 const palette = [
   ["Ink", "#0E0E10"], ["Charcoal", "#1C1C20"], ["Fog", "#BFC2CC"],

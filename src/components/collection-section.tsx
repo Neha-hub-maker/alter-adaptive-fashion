@@ -41,7 +41,7 @@ export function CollectionSection() {
           <p className="mt-3 max-w-[48ch]">Considered layers, easy tailoring and quiet details. Pieces that move with you, from the first light to the last train.</p>
         </div>
         <div className="col-span-12 md:col-span-5 md:self-end">
-          <p className="label mb-2">{theme === "day" ? "Day edit leads. Showing pieces for daylight." : "Night edit leads. Showing pieces for the evening."}</p>
+          <p className="label mb-2"><span className="day-edit">Day edit leads. Showing pieces for daylight.</span><span className="night-edit">Night edit leads. Showing pieces for the evening.</span></p>
           <p className="text-small text-muted">Concept collection for a portfolio project. Product photography is stock imagery.</p>
         </div>
       </Reveal>

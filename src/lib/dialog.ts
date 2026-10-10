@@ -18,6 +18,9 @@ export function openDialog(dialog: HTMLDialogElement, trigger: HTMLElement | nul
   return () => {
     dialog.close();
     document.body.style.overflow = previousOverflow;
-    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    if (trigger?.isConnected) {
+      if (trigger.getClientRects().length) trigger.focus();
+      else document.querySelector<HTMLAnchorElement>(".site-header a[href='/']")?.focus();
+    }
   };
 }

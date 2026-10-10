@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { m as motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import { Reveal } from "@/components/reveal";
 import { durations, stagger } from "@/lib/motion";
@@ -31,7 +31,7 @@ export function HomeHero() {
       <div className="hero-layer hero-layer-night" aria-hidden="true">
         <BackgroundVideo id="texture-blue-silk-loop" overlay="dark" priority active={theme === "night"} className="hero-video" />
         <div className="hero-night-photo hidden md:block">
-          <Image src={optimizedImagePath("street-night-allwhite.jpg", 1400)} alt="" fill sizes="36vw" className="object-cover" />
+          {theme === "night" && <Image src={optimizedImagePath("street-night-allwhite.jpg", 1400)} alt="" fill sizes="36vw" className="object-cover" />}
           <div className="hero-photo-shade" />
         </div>
       </div>
