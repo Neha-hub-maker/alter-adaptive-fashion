@@ -1,13 +1,12 @@
 "use client";
 
-import Image from "next/image";
 import { useRef, useState, useSyncExternalStore } from "react";
-import { motion } from "framer-motion";
 import { Reveal } from "@/components/reveal";
-import { durations, easing, stagger } from "@/lib/motion";
-import { useMotionAllowed } from "@/lib/use-motion-allowed";
-import { optimizedImagePath } from "@/data/images";
-import { filterProducts, sortForTheme, formatPrice, productCategories, type ProductCategory, type Product } from "@/data/products";
+import { stagger } from "@/lib/motion";
+import { filterProducts, sortForTheme, productCategories, type ProductCategory, type Product } from "@/data/products";
+import { ProductCard, focusProductInGrid } from "@/components/product-card";
+import { HourPicks, RecentlyViewed } from "@/components/adaptive-collection";
+import { viewProduct } from "@/lib/profile";
 import { QuickView } from "@/components/quick-view";
 import { useTheme } from "@/lib/use-theme";
 import type { Theme } from "@/lib/theme";
@@ -18,14 +17,18 @@ function mobileColumns() { return 2; }
 
 export function CollectionSection() {
   const { theme } = useTheme();
-  const allowed = useMotionAllowed();
   const columns = useSyncExternalStore(subscribeColumns, gridColumns, mobileColumns);
   const [filtered, setFiltered] = useState(false);
-  const [interactive, setInteractive] = useState<string | null>(null);
   const [mood, setMood] = useState<Theme | "all">("all");
   const [category, setCategory] = useState<ProductCategory | "all">("all");
   const moodAllRef = useRef<HTMLButtonElement>(null);
   const [selection, setSelection] = useState<{ product: Product; trigger: HTMLElement } | null>(null);
+  const openProduct = (product: Product, trigger: HTMLElement) => { viewProduct(product.id); setSelection({ product, trigger }); };
+  const closeView = () => {
+    const previous = selection;
+    setSelection(null);
+    if (previous && !previous.trigger.isConnected) requestAnimationFrame(() => focusProductInGrid(previous.product.id));
+  };
   const pieces = sortForTheme(filterProducts({ mood: mood === "all" ? undefined : mood, category: category === "all" ? undefined : category }), theme);
   const clearFilters = () => { setMood("all"); setCategory("all"); moodAllRef.current?.focus(); };
 
@@ -34,7 +37,7 @@ export function CollectionSection() {
       <Reveal className="editorial-grid mb-6">
         <div className="col-span-12 md:col-span-7">
           <p className="label mb-2 text-muted">01 / Collection</p>
-          <h2 id="collection-title">Made for the in-between.</h2>
+          <h2 id="collection-title" tabIndex={-1}>Made for the in-between.</h2>
           <p className="mt-3 max-w-[48ch]">Considered layers, easy tailoring and quiet details. Pieces that move with you, from the first light to the last train.</p>
         </div>
         <div className="col-span-12 md:col-span-5 md:self-end">
@@ -57,20 +60,11 @@ export function CollectionSection() {
         </fieldset>
       </Reveal>
       <p role="status" aria-live="polite" aria-atomic="true" className="label text-muted my-3">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</p>
+      <HourPicks onOpen={openProduct} />
       <div id="collection-results">
         {pieces.length > 0 ? <ul className="editorial-grid collection-grid" aria-label="Collection pieces">
           {pieces.map((product, index) => <Reveal tag="li" key={product.id} enabled={!filtered} delay={(columns === 4 ? (index < 3 ? 0 : index < 5 ? 1 : 2 + Math.floor((index - 5) / 4)) : Math.floor(index / columns)) * stagger} className="product-card col-span-6 md:col-span-4 lg:col-span-3">
-            <button type="button" className="product-card-button" aria-label={`Quick view: ${product.name}`} onClick={(event) => setSelection({ product, trigger: event.currentTarget })} onMouseEnter={() => { if (window.matchMedia("(hover: hover)").matches) setInteractive(product.id); }} onMouseLeave={(event) => { if (!event.currentTarget.matches(":focus-visible")) setInteractive(null); }} onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setInteractive(product.id); }} onBlur={() => setInteractive(null)}>
-              <span className="product-card-image">
-                <motion.span data-motion-effect className="product-image-scale" animate={{ scale: allowed && interactive === product.id ? 1.04 : 1 }} transition={{ duration: allowed ? durations.fast / 1000 : 0, ease: easing }}>
-                <Image src={optimizedImagePath(product.imageFile, index === 0 ? 1400 : 800)} alt="" fill loading="lazy" className="object-cover" sizes={index === 0 ? "(min-width: 1440px) 656px, (min-width: 1024px) calc(50vw - 64px), (min-width: 768px) calc(33.333vw - 53.333px), calc(50vw - 36px)" : "(min-width: 1440px) 312px, (min-width: 1024px) calc(25vw - 48px), (min-width: 768px) calc(33.333vw - 53.333px), calc(50vw - 36px)"} />
-                </motion.span>
-              </span>
-              <span className="block border-t pt-2">
-                <span className="block font-display text-h4 mb-1">{product.name}</span>
-                <span className="flex flex-wrap items-center justify-between gap-1"><span className="text-small">{formatPrice(product.price)}</span><span className="card-action-label label text-muted" aria-hidden="true"><motion.span animate={{ opacity: interactive === product.id ? 0 : 1 }} transition={{ duration: allowed ? durations.fast / 1000 : 0 }}>{product.mood} edit</motion.span><motion.span animate={{ opacity: interactive === product.id ? 1 : 0 }} transition={{ duration: allowed ? durations.fast / 1000 : 0 }}>Quick view</motion.span></span></span>
-              </span>
-            </button>
+            <ProductCard product={product} wide={index === 0} onOpen={openProduct} />
           </Reveal>)}
         </ul> : <div className="collection-empty border py-6 px-3">
           <h3 className="text-h4">No pieces in this edit.</h3>
@@ -78,7 +72,8 @@ export function CollectionSection() {
           <button type="button" className="choice" onClick={clearFilters}>Clear filters</button>
         </div>}
       </div>
-      {selection && <QuickView key={selection.product.id} product={selection.product} trigger={selection.trigger} onClose={() => setSelection(null)} />}
+      <RecentlyViewed onOpen={openProduct} />
+      {selection && <QuickView key={selection.product.id} product={selection.product} trigger={selection.trigger} onClose={closeView} />}
     </section>
   );
 }

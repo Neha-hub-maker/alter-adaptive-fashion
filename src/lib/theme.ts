@@ -1,3 +1,5 @@
+import { demoPresets, getDemoPreset, getPresetHour, getPhaseAccent, type DemoPreset } from "./adaptation.ts";
+
 export const themes = ["day", "night"] as const;
 export const themeModes = ["auto", ...themes] as const;
 export const accents = ["petrol", "magenta", "camel", "gold"] as const;
@@ -11,7 +13,7 @@ export function resolveTheme(hour: number): Theme {
 }
 
 export function getPhaseLabel(hour: number): "Morning" | "Afternoon" | "Evening" | "Late" {
-  resolveTheme(hour);
+  if (!Number.isFinite(hour) || hour < 0 || hour >= 24) throw new RangeError("Hour must be between 0 (inclusive) and 24 (exclusive).");
   if (hour >= 6 && hour < 12) return "Morning";
   if (hour >= 12 && hour < 18) return "Afternoon";
   if (hour >= 18 && hour < 22) return "Evening";
@@ -26,26 +28,42 @@ export function getDemoHour(search: string): number | undefined {
 
 // Serialized with its pure dependencies so bootstrap and runtime share the same
 // resolver/parser. No browser preference, network request, or hydration is needed.
-function bootstrap(resolve: typeof resolveTheme, parseHour: typeof getDemoHour) {
+function bootstrap(resolve: typeof resolveTheme, parseHour: typeof getDemoHour, phaseAccent: typeof getPhaseAccent, phase: typeof getPhaseLabel, parsePreset: typeof getDemoPreset, presetHour: typeof getPresetHour, presets: typeof demoPresets) {
   const root = document.documentElement;
   const now = new Date();
   let mode: ThemeMode = "auto";
   let accent: Accent = "petrol";
+  let manualAccent = false;
+  let personalized = true;
   try {
     const savedTheme = localStorage.getItem("alter-theme");
     if (savedTheme === "day" || savedTheme === "night") mode = savedTheme;
     const savedAccent = localStorage.getItem("alter-accent");
-    if (savedAccent === "petrol" || savedAccent === "magenta" || savedAccent === "camel" || savedAccent === "gold") accent = savedAccent;
+    if (savedAccent === "petrol" || savedAccent === "magenta" || savedAccent === "camel" || savedAccent === "gold") { accent = savedAccent; manualAccent = true; }
+    personalized = localStorage.getItem("alter-personalization") !== "off";
   } catch { /* The root attributes remain the in-memory source of truth. */ }
-  const hour = mode === "auto" ? (parseHour(window.location.search) ?? now.getHours()) : now.getHours();
+  const preset = parsePreset(window.location.search, presets);
+  root.dataset.realThemeMode = mode;
+  root.dataset.realAccent = accent;
+  root.dataset.realAccentManual = String(manualAccent);
+  root.dataset.adaptiveDemo = preset ?? "";
+  if (preset) { mode = "auto"; personalized = true; }
+  const hour = presetHour(preset, presets) ?? (mode === "auto" ? (parseHour(window.location.search) ?? now.getHours()) : now.getHours());
+  if (!manualAccent && personalized) accent = phaseAccent(hour);
   root.dataset.themeMode = mode;
   root.dataset.theme = mode === "auto" ? resolve(hour) : mode;
   root.dataset.accent = accent;
+  root.dataset.accentManual = String(manualAccent);
+  root.dataset.personalization = personalized ? "on" : "off";
+  root.dataset.phase = phase(hour);
+  root.dataset.accentTransition = "on";
   root.dataset.hour = String(hour);
   root.dataset.time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
-export const themeBootstrap = `(${bootstrap.toString()})(${resolveTheme.toString()}, ${getDemoHour.toString()});`;
+// Inject dependencies as parameters: serialized functions must survive production
+// minification without referring to a sibling's original JavaScript name.
+export const themeBootstrap = `(${bootstrap.toString()})(${resolveTheme.toString()},${getDemoHour.toString()},${getPhaseAccent.toString()},${getPhaseLabel.toString()},${getDemoPreset.toString()},${getPresetHour.toString()},${JSON.stringify(demoPresets)});`;
 
 export function getThemeSnapshot(): string {
   const { themeMode, theme, accent, hour, time } = document.documentElement.dataset;
@@ -68,8 +86,10 @@ export function registerThemeTransition(handler: ThemeTransition) {
 function requestTheme(theme: Theme) {
   const commit = () => {
     if (document.documentElement.dataset.theme === theme) return;
+    document.documentElement.dataset.accentTransition = "off";
     document.documentElement.dataset.theme = theme;
     notifyTheme();
+    requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.dataset.accentTransition = "on"; }));
   };
   if (transition) transition(theme, commit);
   else commit();
@@ -79,8 +99,10 @@ export function refreshTheme() {
   const before = getThemeSnapshot();
   const root = document.documentElement;
   const now = new Date();
-  const hour = root.dataset.themeMode === "auto" ? (getDemoHour(window.location.search) ?? now.getHours()) : now.getHours();
+  const hour = getPresetHour(root.dataset.adaptiveDemo) ?? (root.dataset.themeMode === "auto" ? (getDemoHour(window.location.search) ?? now.getHours()) : now.getHours());
   root.dataset.hour = String(hour);
+  root.dataset.phase = getPhaseLabel(hour);
+  if (root.dataset.accentManual !== "true") root.dataset.accent = root.dataset.personalization === "off" ? "petrol" : getPhaseAccent(hour);
   root.dataset.time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   requestTheme(root.dataset.themeMode === "day" || root.dataset.themeMode === "night" ? root.dataset.themeMode : resolveTheme(hour));
   if (getThemeSnapshot() !== before) notifyTheme();
@@ -89,6 +111,7 @@ export function refreshTheme() {
 export function setThemeMode(mode: ThemeMode) {
   document.documentElement.dataset.themeMode = mode;
   try {
+    if (document.documentElement.dataset.adaptiveDemo) { refreshTheme(); notifyTheme(); return; }
     if (mode === "auto") localStorage.removeItem("alter-theme");
     else localStorage.setItem("alter-theme", mode);
   } catch { /* Changes still apply for this page session. */ }
@@ -98,8 +121,30 @@ export function setThemeMode(mode: ThemeMode) {
 
 export function setAccent(accent: Accent) {
   document.documentElement.dataset.accent = accent;
-  try { localStorage.setItem("alter-accent", accent); } catch { /* Memory-only preference. */ }
+  document.documentElement.dataset.accentManual = "true";
+  try { if (!document.documentElement.dataset.adaptiveDemo) localStorage.setItem("alter-accent", accent); } catch { /* Memory-only preference. */ }
   notifyTheme();
+}
+
+let realSettings: { mode: string; accent: string; manual: string } | undefined;
+export function setDemoTheme(preset: DemoPreset | null) {
+  const root = document.documentElement;
+  if (preset) {
+    if (!realSettings) realSettings = root.dataset.adaptiveDemo
+      ? { mode: root.dataset.realThemeMode ?? "auto", accent: root.dataset.realAccent ?? "petrol", manual: root.dataset.realAccentManual ?? "false" }
+      : { mode: root.dataset.themeMode ?? "auto", accent: root.dataset.accent ?? "petrol", manual: root.dataset.accentManual ?? "false" };
+    root.dataset.adaptiveDemo = preset;
+    root.dataset.themeMode = "auto";
+  } else {
+    root.dataset.adaptiveDemo = "";
+    if (realSettings) {
+      root.dataset.themeMode = realSettings.mode;
+      root.dataset.accent = realSettings.accent;
+      root.dataset.accentManual = realSettings.manual;
+    }
+    realSettings = undefined;
+    refreshTheme();
+  }
 }
 
 export function startThemeClock() {

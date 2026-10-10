@@ -34,7 +34,7 @@ export function ThemeControls() {
         <legend className="label mb-2 text-muted">Accent</legend>
         <div className="flex flex-wrap gap-1">
           {accents.map((value) => (
-            <label className="choice" key={value}>
+            <label className="choice accent-choice" data-accent-choice={value} key={value}>
               <input className="sr-only" type="radio" name={`${id}-accent`} value={value} checked={accent === value} onChange={() => setAccent(value)} />
               <span aria-hidden="true" className="h-2 w-2 border border-current" style={{ backgroundColor: `var(--${value})` }} />
               <span className="capitalize">{value}</span>
