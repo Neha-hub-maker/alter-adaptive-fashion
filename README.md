@@ -4,7 +4,7 @@
 
 ALTER is a fictional adaptive fashion and lifestyle brand for a UX design portfolio. Its foundation is minimal, editorial, urban and unisex: bright, airy Day and dark, monochrome Night.
 
-The project includes the foundation, a time-aware hero homepage, an accessible site header, an adaptive concept collection with quick views and a bag counter, a reusable decorative video component and a temporary `/style-guide` route. Story remains a clearly marked placeholder. Checkout, a cart drawer and scroll animations are not implemented. Framer Motion and GSAP are installed for later work and are not imported.
+The project includes the foundation, a time-aware hero homepage, an accessible site header, an adaptive concept collection with quick views and a bag counter, a motion system, a three-beat Story, a small footer and a temporary `/style-guide` route. Framer Motion handles UI entrances and parallax; GSAP ScrollTrigger is deferred until the desktop Story needs media pinning.
 
 ## Development
 
@@ -70,15 +70,15 @@ Use `/?hour=9` or `/?hour=19` (also supported on `/style-guide`) to demo Auto at
 
 Typed helpers `resolveTheme(hour)` and `getPhaseLabel(hour)` are exported from `src/lib/theme.ts`. Morning is 06:00–11:59, Afternoon 12:00–17:59, Evening 18:00–21:59, and Late 22:00–05:59.
 
-Native, labeled Auto/Day/Night radio groups provide keyboard behavior and selected state. Auto displays its current Day/Night mood. Color, background-color and border-color transitions last 400ms; `prefers-reduced-motion: reduce` removes them. Background videos fade in over their posters in 400ms when motion is allowed; hero mood layers crossfade in 600ms. No motion-library behavior is implemented.
+Native, labeled Auto/Day/Night radio groups provide keyboard behavior and selected state. Auto displays its current Day/Night mood. Semantic colours switch at the theme commit; animated effects use only opacity and transform. Background videos fade over their posters in 400ms when motion is allowed; hero mood layers crossfade in 600ms. System reduced motion or the footer's Motion: Off choice switches media instantly and keeps posters.
 
 ### Header and homepage hero
 
 The sticky, opaque header shares the same mood control with the style guide. Collection and Story link to homepage anchors, including when navigating from the style guide. Below 768px, Menu opens a full-screen native modal dialog with background content made inert, an explicit keyboard focus loop, Escape/Close dismissal, scroll locking and focus restoration. Resizing into desktop navigation also closes the panel. The first focusable element is the Skip to content link.
 
-The Day hero reuses `BackgroundVideo` with `hero-day-street-walk` and the mobile `hero-day-street-walk-portrait` variant, with priority loading. Night uses `texture-blue-silk-loop` with a dark overlay and the optimized `street-night-allwhite` photo on the right from 768px up. Only the active mood video plays; inactive media uses `preload="none"` and retains its last frame for the crossfade. Both media layers use CSS visibility via theme attributes before hydration. Reduced motion switches layers instantly and shows video posters; Save-Data also uses posters. Hero copy stays Ivory over the existing dark gradient, with a worst-case normal-text contrast of 6.97:1. The right-side Night photo is outside the text area.
+The Day hero reuses `BackgroundVideo` with `hero-day-street-walk` and the mobile `hero-day-street-walk-portrait` variant, with priority loading. Ink text sits over a local Ivory wash that fades away outside the copy area. Night uses `texture-blue-silk-loop` with a dark overlay, Ivory text and the optimized `street-night-allwhite` photo on the right from 768px up, outside the copy. Both media layers use theme attributes before hydration. Reduced motion switches layers instantly and shows posters; Save-Data also uses posters. The conservative sampled normal-text contrast minima are **13.67:1 Day landscape**, **13.71:1 Day portrait** and **11.04:1 Night**. See [the repeatable audit and all frame measurements](docs/hero-contrast.md).
 
-The hero's phase label follows the effective hour; its clock shows real local time. Its collection button targets the concept collection and its story link targets the minimal Story placeholder, explicitly marked in source for replacement in a later task.
+The hero's phase label follows the effective hour; its clock shows real local time. Its collection button and story link target the corresponding homepage sections.
 
 ### Typography
 
@@ -113,6 +113,22 @@ The collection reuses `.canvas` and the 12-column `.editorial-grid`: two cards a
 Each card opens a native quick-view dialog with the original image description, garment details, labelled colour choices and a required size group. Missing size selection shows an inline error and focuses that group. The modal shares the header's focus-wrap and scroll-lock helpers, closes with Escape, Close or a desktop backdrop click, and returns focus to its opening card. On mobile it fills the viewport and scrolls internally. Successful additions announce the piece and size inside the dialog for five seconds.
 
 The shared bag store in `src/lib/bag.ts` persists `{ version: 1, count, items }` under **`alter-bag`**. Each addition records a `productId`, `size` and palette `colorToken`; adding the same variant twice counts as two items. Restored entries are validated against the catalog, and the count is derived from valid items. Malformed or denied storage falls back to memory for the current page session. Bag counters in the header and mobile menu stay in sync; on the homepage they scroll to Collection. On the style guide they display the count only. This is a portfolio interaction with no checkout or payment flow.
+
+## Motion system
+
+`src/lib/motion.ts` defines shared durations in milliseconds (`fast: 200`, `base: 400`, `slow: 800`), the easing curve `[0.22, 1, 0.36, 1]` and an 80ms stagger. New effects animate only **transform and opacity**. Image frames, text and grids reserve their space; semantic colour changes are immediate.
+
+`useMotionAllowed()` is true only when the system does not request `prefers-reduced-motion: reduce` and the visitor has not chosen Off. The footer's **Motion: On/Off** button exposes `aria-pressed` and stores `on`/`off` under **`alter-motion`**, with a memory fallback if storage fails. A saved On never overrides system reduced motion. The before-paint bootstrap applies the preference before reveal CSS is visible; disabling motion immediately finishes entrances, removes pinning/parallax, stops videos, skips dusk and leaves readable final states. Save-Data additionally keeps video posters even when UI motion is allowed.
+
+The headline reveals line by line on the first homepage mount, followed by supporting copy and links. Hero media translates at most 3% and scales from 1.02 to 1.06 inside an oversized, clipped frame. Collection heading, filters and cards reveal once with a row stagger. Once filters are used, new/remounted results stay in their final state. Hover-capable pointers and keyboard focus get the same 1.04 image scale and Quick view label; touch receives no hover scale. Off/reduced motion keeps the label change instant with no image movement.
+
+Theme requests share the existing theme store. On the homepage with motion allowed, a single 1.2-second decorative dusk layer fades in, commits the latest theme at 600ms and fades out. It uses `mood-dusk-silhouette` with its poster as the fallback; media errors never delay the timers. Repeated requests replace the pending target, and late requests use the existing fade-out window. The layer is `aria-hidden`, ignores pointer events, never takes focus and has a 1.5-second safety deadline. Initial load, the style guide and disabled motion commit directly. Route/preference changes clean up the sequence and commit its latest choice.
+
+Story keeps all three text beats in normal DOM and reading order. Desktop pins only the large `behind-the-scenes-shoot` media beside naturally scrolling text; mobile is stacked. The second beat pairs with `boutique-hands-sweaters`. GSAP/ScrollTrigger loads near Story, uses transform pinning and removes its trigger/spacer on unmount, viewport changes or disabled motion. There is no wheel, touch or keyboard interception. All three beats remain readable without an overlapping text timeline.
+
+`BackgroundVideo` now shares motion preferences and a visibility coordinator. Non-priority clips defer their source until selected in the viewport. Of active, visible decorative clips, the one closest to the viewport centre plays; the others pause, retaining their frames. The smaller Story insert takes priority when at least 60% visible, so the pinned background pauses during that beat. Dusk temporarily pauses other footage. Visibility changes, responsive replacements and unmounts clean up observers, playback entries and animation-frame work. Posters remain the fallback for failed or rejected playback.
+
+The browser suite covers first-load exclusion and midpoint timing for dusk, automatic hour boundaries, rapid toggles, failed media, preference persistence/denied storage, reduced-motion final states, parallax coverage, card focus, Story reading order, trigger cleanup and CLS. `node scripts/check-hero-contrast.mjs` is an optional audit requiring ffmpeg; temporary decoded frames are removed automatically. See [the baseline performance comparison and CLS measurements](docs/motion-performance.md).
 
 ## Image rules
 
@@ -163,7 +179,7 @@ const textures = getVideos({ role: "texture", mood: "night", orientation: "lands
 
 `BackgroundVideo` accepts `id`, optional `portraitId`, `className`, `overlay` (`none`, `light`, `dark`; default `dark`), `priority` (default `false`) and `active` (default `true`). Below 768px, a supplied portrait ID switches both the clip and poster; a non-portrait alternate is rejected. CSS reserves the correct aspect ratio before hydration. The video is muted, looping, inline, hidden from assistive technology and has no controls or focus stop. It plays only while active, intersecting the viewport and the document is visible, pauses when hidden, and retains its poster if autoplay is rejected or media fails. The first successful playback fades over the poster. Priority changes active video preload from `metadata` to `auto` and makes the poster load eagerly; it does not bypass visibility or preference checks. Inactive layers preload no video and retain paused frames for crossfades.
 
-Before preferences are checked, server output contains only the responsive poster. Reduced motion or the browser's Save-Data flag prevents video mounting and MP4 requests. Changes to those preferences are honored while the page is open. A browser without IntersectionObserver retains the poster rather than starting uncontrolled playback.
+Before preferences are checked, server output contains only the responsive poster. System reduced motion, Motion: Off or the browser's Save-Data flag prevents video mounting and MP4 requests. Changes to those preferences are honored while the page is open. A browser without IntersectionObserver retains the poster rather than starting uncontrolled playback.
 
 For overlay text, pair **Ivory text with `dark`** and **Ink text with `light`**, regardless of the theme. Both gradients use existing Ink/Ivory tokens, with minimum opacity chosen to exceed WCAG AA normal-text contrast even over the worst-case white or black frame. Position readable text as a sibling above the decorative component, not inside its `aria-hidden` wrapper. `none` preserves unaltered footage in the motion-library gallery and requires separate contrast treatment if text is added later.
 

@@ -59,6 +59,22 @@ export function subscribeTheme(callback: () => void) {
 }
 function notifyTheme() { window.dispatchEvent(new Event("alter-theme-change")); }
 
+type ThemeTransition = (theme: Theme, commit: () => void) => void;
+let transition: ThemeTransition | undefined;
+export function registerThemeTransition(handler: ThemeTransition) {
+  transition = handler;
+  return () => { if (transition === handler) transition = undefined; };
+}
+function requestTheme(theme: Theme) {
+  const commit = () => {
+    if (document.documentElement.dataset.theme === theme) return;
+    document.documentElement.dataset.theme = theme;
+    notifyTheme();
+  };
+  if (transition) transition(theme, commit);
+  else commit();
+}
+
 export function refreshTheme() {
   const before = getThemeSnapshot();
   const root = document.documentElement;
@@ -66,13 +82,12 @@ export function refreshTheme() {
   const hour = root.dataset.themeMode === "auto" ? (getDemoHour(window.location.search) ?? now.getHours()) : now.getHours();
   root.dataset.hour = String(hour);
   root.dataset.time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  if (root.dataset.themeMode === "auto") root.dataset.theme = resolveTheme(hour);
+  requestTheme(root.dataset.themeMode === "day" || root.dataset.themeMode === "night" ? root.dataset.themeMode : resolveTheme(hour));
   if (getThemeSnapshot() !== before) notifyTheme();
 }
 
 export function setThemeMode(mode: ThemeMode) {
   document.documentElement.dataset.themeMode = mode;
-  if (mode !== "auto") document.documentElement.dataset.theme = mode;
   try {
     if (mode === "auto") localStorage.removeItem("alter-theme");
     else localStorage.setItem("alter-theme", mode);

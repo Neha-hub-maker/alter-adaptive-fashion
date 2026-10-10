@@ -1,6 +1,11 @@
 "use client";
 
 import Image from "next/image";
+import { motion, useScroll, useTransform } from "framer-motion";
+import { useRef } from "react";
+import { Reveal } from "@/components/reveal";
+import { durations, stagger } from "@/lib/motion";
+import { useMotionAllowed } from "@/lib/use-motion-allowed";
 import { BackgroundVideo } from "@/components/background-video";
 import { optimizedImagePath } from "@/data/images";
 import { getPhaseLabel } from "@/lib/theme";
@@ -8,10 +13,16 @@ import { useTheme } from "@/lib/use-theme";
 
 export function HomeHero() {
   const { theme, hour, time } = useTheme();
+  const ref = useRef<HTMLElement>(null);
+  const allowed = useMotionAllowed();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
+  const y = useTransform(scrollYProgress, [0, 1], ["0%", "3%"]);
+  const scale = useTransform(scrollYProgress, [0, 1], [1.02, 1.06]);
   return (
-    <section aria-labelledby="hero-title" className="home-hero">
+    <section ref={ref} aria-labelledby="hero-title" className="home-hero">
+      <div className="hero-media-window"><motion.div data-motion-effect className="hero-media" style={{ y: allowed ? y : 0, scale: allowed ? scale : 1 }}>
       <div className="hero-layer hero-layer-day" aria-hidden="true">
-        <BackgroundVideo id="hero-day-street-walk" portraitId="hero-day-street-walk-portrait" overlay="dark" priority active={theme === "day"} className="hero-video" />
+        <BackgroundVideo id="hero-day-street-walk" portraitId="hero-day-street-walk-portrait" overlay="none" priority active={theme === "day"} className="hero-video" />
       </div>
       <div className="hero-layer hero-layer-night" aria-hidden="true">
         <BackgroundVideo id="texture-blue-silk-loop" overlay="dark" priority active={theme === "night"} className="hero-video" />
@@ -20,18 +31,20 @@ export function HomeHero() {
           <div className="hero-photo-shade" />
         </div>
       </div>
+      </motion.div></div>
+      <div className="day-hero-wash" aria-hidden="true" />
       <div className="canvas hero-content">
         <p className="label mb-3 flex flex-wrap items-center gap-2">
           <span>{hour === undefined ? "Your hour" : getPhaseLabel(hour)} / <span className="day-edit">Day edit</span><span className="night-edit">Night edit</span></span>
           <span aria-hidden="true">—</span>
           <time dateTime={time || undefined}>{time || "--:--"}</time><span className="sr-only">local time</span>
         </p>
-        <h1 id="hero-title" className="hero-headline">Dress for the<br />hour you&apos;re in.</h1>
-        <p className="mb-4 mt-3 max-w-[45ch]">An adaptive wardrobe for every hour of the city.</p>
-        <div className="flex flex-wrap items-center gap-3">
+        <h1 id="hero-title" className="hero-headline"><Reveal tag="span" className="block" immediate>Dress for the</Reveal>{" "}<Reveal tag="span" className="block" immediate delay={stagger}>hour you&apos;re in.</Reveal></h1>
+        <Reveal immediate delay={stagger + durations.base} className="mb-4 mt-3 max-w-[45ch]"><p>An adaptive wardrobe for every hour of the city.</p></Reveal>
+        <Reveal immediate delay={stagger * 2 + durations.base} className="flex flex-wrap items-center gap-3">
           <a href="#collection" className="hero-button label">Explore the collection</a>
           <a href="#story" className="text-small underline underline-offset-4">Our story</a>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

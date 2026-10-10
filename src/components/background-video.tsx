@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { getVideoById, type VideoMetadata } from "@/data/videos";
+import { useMotionAllowed } from "@/lib/use-motion-allowed";
 
 export interface BackgroundVideoProps {
   id: string;
@@ -43,6 +44,32 @@ function snapshot() {
 function serverSnapshot() { return "pending:landscape"; }
 function aspect(video: VideoMetadata) { return video.orientation === "portrait" ? "9 / 16" : "16 / 9"; }
 
+interface PlaybackEntry { video: HTMLVideoElement; asset: VideoMetadata; visible: boolean; ratio: number; active: boolean; failed: () => void }
+const playbackEntries = new Set<PlaybackEntry>();
+let playbackFrame = 0;
+function syncPlayback() {
+  const dusk = document.documentElement.dataset.duskActive === "true";
+  const candidates = [...playbackEntries].filter((entry) => entry.active && entry.visible && document.visibilityState === "visible" && (!dusk || entry.asset.role === "transition"));
+  candidates.sort((a, b) => {
+    // Let the smaller Story insert take over once most of it is visible, rather
+    // than having the pinned background win throughout the whole second beat.
+    const insert = (entry: PlaybackEntry) => window.location.pathname === "/" && entry.asset.role === "collection" && entry.ratio >= 0.6 ? 1 : 0;
+    if (insert(a) !== insert(b)) return insert(b) - insert(a);
+    const distance = (entry: PlaybackEntry) => { const box = entry.video.getBoundingClientRect(); return Math.abs(box.top + box.height / 2 - window.innerHeight / 2); };
+    return distance(a) - distance(b);
+  });
+  const winner = candidates[0];
+  for (const entry of playbackEntries) {
+    if (entry !== winner) { entry.video.pause(); continue; }
+    if (entry.video.getAttribute("src") !== entry.asset.src) entry.video.src = entry.asset.src;
+    if (entry.video.paused) void entry.video.play().catch(entry.failed);
+  }
+}
+function schedulePlayback() {
+  if (playbackFrame) return;
+  playbackFrame = requestAnimationFrame(() => { playbackFrame = 0; syncPlayback(); });
+}
+
 function PlaybackVideo({ asset, priority, active }: { asset: VideoMetadata; priority: boolean; active: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -51,35 +78,33 @@ function PlaybackVideo({ asset, priority, active }: { asset: VideoMetadata; prio
     const video = ref.current;
     // A browser without IntersectionObserver stays on the poster.
     if (!video || !window.IntersectionObserver) return;
-    // Restore the source after React's development Strict Mode cleanup/re-setup.
-    if (video.getAttribute("src") !== asset.src) video.src = asset.src;
-    let visible = false;
     let disposed = false;
-    const sync = () => {
-      if (active && visible && document.visibilityState === "visible") {
-        void video.play().catch(() => {
-          // Autoplay can be rejected; leave the poster visible and avoid an unhandled rejection.
-          if (!disposed) setPlaying(false);
-        });
-      } else {
-        video.pause();
-      }
-    };
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      sync();
-    });
+    const entry: PlaybackEntry = { video, asset, visible: false, ratio: 0, active, failed: () => { if (!disposed) setPlaying(false); } };
+    playbackEntries.add(entry);
+    window.addEventListener("scroll", schedulePlayback, { passive: true });
+    const observer = new IntersectionObserver(([intersection]) => {
+      entry.visible = intersection.isIntersecting;
+      entry.ratio = intersection.intersectionRatio;
+      syncPlayback();
+    }, { threshold: [0, 0.6] });
     observer.observe(video);
-    video.addEventListener("canplay", sync);
-    document.addEventListener("visibilitychange", sync);
+    video.addEventListener("canplay", syncPlayback);
+    document.addEventListener("visibilitychange", syncPlayback);
+    window.addEventListener("alter-media-change", syncPlayback);
     return () => {
       disposed = true;
       observer.disconnect();
-      document.removeEventListener("visibilitychange", sync);
-      video.removeEventListener("canplay", sync);
+      playbackEntries.delete(entry);
+      if (!playbackEntries.size) {
+        window.removeEventListener("scroll", schedulePlayback); cancelAnimationFrame(playbackFrame); playbackFrame = 0;
+        document.removeEventListener("visibilitychange", syncPlayback);
+        window.removeEventListener("alter-media-change", syncPlayback);
+      }
+      video.removeEventListener("canplay", syncPlayback);
       video.pause();
+      syncPlayback();
     };
-  }, [asset.src, active]);
+  }, [asset, active]);
 
   useEffect(() => {
     const video = ref.current;
@@ -95,7 +120,7 @@ function PlaybackVideo({ asset, priority, active }: { asset: VideoMetadata; prio
   return (
     <video
       ref={ref}
-      src={asset.src}
+      src={priority ? asset.src : undefined}
       poster={asset.poster}
       muted
       loop
@@ -118,6 +143,7 @@ export function BackgroundVideo({ id, portraitId, className = "", overlay = "dar
     throw new Error(`ALTER portraitId "${portraitId}" must reference a portrait video.`);
   }
   const [mode, orientation] = useSyncExternalStore(subscribe, snapshot, serverSnapshot).split(":");
+  const motionAllowed = useMotionAllowed();
   const selected = orientation === "portrait" && portrait ? portrait : primary;
   const style = {
     "--video-aspect": aspect(primary),
@@ -131,7 +157,7 @@ export function BackgroundVideo({ id, portraitId, className = "", overlay = "dar
         <Image src={primary.poster} alt="" fill unoptimized loading={priority ? "eager" : "lazy"} className="object-cover" />
       </picture>
       {/* No media element or MP4 request until browser preferences have been checked. */}
-      {mode === "motion" && <PlaybackVideo key={selected.id} asset={selected} priority={priority} active={active} />}
+      {mode === "motion" && motionAllowed && <PlaybackVideo key={selected.id} asset={selected} priority={priority} active={active} />}
       {overlay !== "none" && <div className="background-video-overlay" data-overlay={overlay} />}
     </div>
   );
