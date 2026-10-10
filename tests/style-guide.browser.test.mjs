@@ -82,11 +82,12 @@ test("initial demo/auto mood, manual preference and keyboard focus work without 
   await context.close();
 });
 
-test("mobile style guide has no overflow and retains theme transitions alongside site navigation", async () => {
+test("mobile style guide has no overflow and keeps site navigation without animating colours", async () => {
   const page = await browser.newPage({ viewport: { width: 320, height: 800 } });
   await page.goto(`${base}/style-guide`);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   assert.equal(await page.locator("body").evaluate((element) => getComputedStyle(element).transitionDuration), "0.4s");
+  assert.equal(await page.locator("body").evaluate((element) => getComputedStyle(element).transitionProperty), "none");
   assert.equal(await page.getByRole("button", { name: "Menu", exact: true }).count(), 1);
   assert.equal((await fetch(base)).status, 200);
   await page.screenshot({ path: "/tmp/alter-style-guide-mobile.png", fullPage: true });
@@ -105,7 +106,7 @@ test("visible video plays and fades in, then pauses off-screen", async () => {
   await page.waitForFunction(() => document.querySelectorAll("video").length === 7);
   assert.equal(await page.locator("video").evaluateAll((elements) => elements.every((video) => video.paused)), true);
   const figure = heroFigure(page);
-  await figure.scrollIntoViewIfNeeded();
+  await figure.locator(".background-video").evaluate((element) => element.scrollIntoView({ block: "center" }));
   const video = figure.locator("video");
   await page.waitForFunction(() => {
     const video = document.querySelector('video[src="/video/hero-day-street-walk.mp4"]');
@@ -134,6 +135,7 @@ test("portrait source, poster and reserved ratio switch precisely at 768px", asy
   await page.waitForFunction(() => [...document.images].some((image) => image.currentSrc.endsWith("/hero-day-street-walk-portrait-poster.jpg") && image.complete));
   assert.deepEqual(await frame.boundingBox(), box);
   await page.setViewportSize({ width: 768, height: 900 });
+  await figure.locator(".background-video").evaluate((element) => element.scrollIntoView({ block: "center" }));
   await page.waitForFunction(() => document.querySelector('video[src="/video/hero-day-street-walk.mp4"]'));
   assert.equal(await video.getAttribute("poster"), "/video/hero-day-street-walk-poster.jpg");
   const wide = await frame.boundingBox();
@@ -516,5 +518,160 @@ test("bag works with denied or malformed storage and derives restored count from
     assert.equal(await page.locator("header").getByText(`Bag (${initialCount + 2})`, { exact: true }).count(), 1);
     assert.deepEqual(errors, [], scenario);
     await context.close();
+  }
+});
+
+test("dusk waits until the midpoint, coalesces rapid choices and never runs on initial load or the guide", async () => {
+  const page = await browser.newPage({ reducedMotion: "no-preference", viewport: { width: 1440, height: 1000 } });
+  const requests = [];
+  page.on("request", (request) => { if (request.url().includes("mood-dusk-silhouette.mp4")) requests.push(request.url()); });
+  await page.goto(`${base}/?hour=9`);
+  await page.getByRole("button", { name: "Motion: On", exact: true }).waitFor();
+  assert.equal(await page.locator(".dusk-transition").getAttribute("data-active"), "false");
+  assert.deepEqual(requests, []);
+  const header = page.locator("header");
+  const chooseMood = async (name) => header.getByRole("radio", { name, exact: true }).locator("..").click();
+  const start = await page.evaluate(() => performance.now());
+  await chooseMood("Night");
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "day");
+  const overlay = page.locator(".dusk-transition");
+  assert.equal(await overlay.getAttribute("aria-hidden"), "true");
+  assert.equal(await overlay.evaluate((element) => getComputedStyle(element).pointerEvents), "none");
+  await chooseMood("Day");
+  await chooseMood("Night");
+  assert.equal(await page.locator(".dusk-video").count(), 1);
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "night");
+  const midpoint = await page.evaluate(() => performance.now());
+  assert.ok(midpoint - start >= 500 && midpoint - start < 1100);
+  // A late choice uses the existing fade-out window instead of starting a stack.
+  await chooseMood("Day");
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "day");
+  await page.waitForFunction(() => document.querySelector(".dusk-transition").dataset.active === "false");
+  assert.ok((await page.evaluate(() => performance.now())) - start < 1500);
+  assert.equal(await page.locator(".dusk-video").count(), 0);
+  assert.equal(await header.getByRole("radio", { name: "Day", exact: true }).evaluate((element) => document.activeElement === element), true);
+  await page.goto(`${base}/style-guide`);
+  await choose(page, "night");
+  assert.equal(await overlay.getAttribute("data-active"), "false");
+  await page.close();
+});
+
+test("dusk switches at an auto hour boundary and completes even when its video fails", async () => {
+  const page = await browser.newPage({ reducedMotion: "no-preference", timezoneId: "UTC" });
+  await page.route("**/mood-dusk-silhouette.mp4", (route) => route.abort());
+  await page.clock.install({ time: new Date("2026-10-10T17:59:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-10T17:59:10Z"));
+  await page.goto(base);
+  await page.getByRole("button", { name: "Motion: On", exact: true }).waitFor();
+  await page.clock.fastForward(50_000);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "day");
+  assert.equal(await page.locator(".dusk-transition").getAttribute("data-active"), "true");
+  await page.clock.runFor(600);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "night");
+  await page.clock.runFor(650);
+  assert.equal(await page.locator(".dusk-transition").getAttribute("data-active"), "false");
+  assert.equal(await page.locator(".dusk-video").count(), 0);
+  await page.close();
+});
+
+test("footer motion preference persists and reduced motion exposes final states immediately", async () => {
+  const page = await browser.newPage({ reducedMotion: "no-preference", viewport: { width: 1440, height: 1000 } });
+  await page.goto(`${base}/?hour=9`);
+  await page.getByRole("button", { name: "Motion: On", exact: true }).click();
+  assert.equal(await page.evaluate(() => localStorage.getItem("alter-motion")), "off");
+  await page.waitForFunction(() => document.querySelectorAll("video").length === 0);
+  assert.equal(await page.locator("html").getAttribute("data-motion"), "off");
+  await page.reload();
+  assert.equal(await page.getByRole("button", { name: "Motion: Off", exact: true }).getAttribute("aria-pressed"), "false");
+  assert.equal(await page.locator("video").count(), 0);
+  assert.equal(await page.locator("[data-motion-effect]").evaluateAll((elements) => elements.every((element) => getComputedStyle(element).opacity === "1" && getComputedStyle(element).transform === "none")), true);
+  assert.equal(await page.locator("body").evaluate((element) => getComputedStyle(element).transitionDuration), "0s");
+  await page.locator("header").getByRole("radio", { name: "Night", exact: true }).locator("..").click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "night");
+  assert.equal(await page.locator(".dusk-transition").getAttribute("data-active"), "false");
+  await page.getByRole("button", { name: "Motion: Off", exact: true }).click();
+  await page.getByRole("button", { name: "Motion: On", exact: true }).waitFor();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.getByRole("button", { name: "Motion: Off", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Motion: Off", exact: true }).click();
+  assert.equal(await page.locator("html").getAttribute("data-motion"), "off");
+  assert.equal(await page.locator("video").count(), 0);
+  assert.equal(await page.locator(".pin-spacer").count(), 0);
+  await page.close();
+
+  const context = await browser.newContext({ reducedMotion: "no-preference" });
+  await context.addInitScript(() => { for (const method of ["getItem", "setItem"]) Storage.prototype[method] = () => { throw new Error("Denied"); }; });
+  const memory = await context.newPage();
+  await memory.goto(`${base}/?hour=9`);
+  await memory.getByRole("button", { name: "Motion: On", exact: true }).click();
+  await memory.getByRole("button", { name: "Motion: Off", exact: true }).waitFor();
+  assert.equal(await memory.locator("html").getAttribute("data-motion-preference"), "off");
+  await memory.waitForFunction(() => document.querySelectorAll("video").length === 0);
+  await context.close();
+});
+
+test("hero reveals, parallax and card focus effects keep their frames and filters do not replay entrances", async () => {
+  const page = await browser.newPage({ reducedMotion: "no-preference", viewport: { width: 1440, height: 1000 } });
+  await page.goto(`${base}/?hour=9`);
+  await page.waitForFunction(() => [...document.querySelectorAll(".hero-content [data-motion-effect]")].every((element) => getComputedStyle(element).opacity === "1" && getComputedStyle(element).transform === "none"));
+  assert.equal(await page.locator(".hero-content").evaluate((element) => getComputedStyle(element).color), "rgb(14, 14, 16)");
+  const initial = await page.locator(".hero-media").evaluate((element) => getComputedStyle(element).transform);
+  await page.evaluate(() => window.scrollTo(0, 300));
+  await page.waitForFunction((initial) => getComputedStyle(document.querySelector(".hero-media")).transform !== initial, initial);
+  const coverage = await page.locator(".hero-media-window").evaluate((element) => {
+    const frame = element.getBoundingClientRect(); const media = element.firstElementChild.getBoundingClientRect();
+    return media.top <= frame.top && media.bottom >= frame.bottom && media.left <= frame.left && media.right >= frame.right;
+  });
+  assert.equal(coverage, true);
+  const collection = page.locator("#collection");
+  const card = collection.getByRole("button", { name: "Quick view: Meridian Overcoat", exact: true });
+  await card.focus();
+  await page.waitForFunction(() => getComputedStyle(document.querySelector(".product-image-scale")).transform.startsWith("matrix(1.04"));
+  assert.equal(await card.evaluate((element) => getComputedStyle(element).outlineStyle), "solid");
+  await collection.getByRole("group", { name: "Mood", exact: true }).getByRole("button", { name: "Night edit" }).click();
+  await collection.getByRole("group", { name: "Mood", exact: true }).getByRole("button", { name: "All", exact: true }).click();
+  assert.equal(await collection.locator(".product-card").evaluateAll((elements) => elements.every((element) => getComputedStyle(element).opacity === "1" && getComputedStyle(element).transform === "none")), true);
+  await page.screenshot({ path: "/tmp/alter-motion-collection.png" });
+  await page.close();
+});
+
+test("Story preserves readable DOM order, pins only desktop media, cleans up and keeps CLS low", async () => {
+  const titles = ["Made for the hour you're in", "One piece. Many hours.", "Style without a dividing line"];
+  for (const [width, preference] of [[1440, "no-preference"], [375, "no-preference"], [1440, "reduce"]]) {
+    const page = await browser.newPage({ reducedMotion: preference, viewport: { width, height: 1000 } });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.addInitScript(() => {
+      window.alterCLS = 0;
+      window.alterShifts = [];
+      new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (!entry.hadRecentInput) { window.alterCLS += entry.value; window.alterShifts.push(entry.value); } }).observe({ type: "layout-shift", buffered: true });
+    });
+    await page.goto(`${base}/?hour=9`);
+    assert.deepEqual(await page.locator(".story-beat h3").allTextContents(), titles);
+    assert.equal(await page.locator(".story-beat").evaluateAll((elements) => elements.every((element) => !element.closest("[aria-hidden='true']") && element.textContent.trim().length > 80)), true);
+    await page.locator("#story-title").scrollIntoViewIfNeeded();
+    if (width >= 768 && preference !== "reduce") await page.waitForFunction(() => document.querySelector(".story-stage").dataset.pinned === "true");
+    else assert.equal(await page.locator(".pin-spacer").count(), 0);
+    for (const [index, beat] of (await page.locator(".story-beat").all()).entries()) {
+      await beat.scrollIntoViewIfNeeded();
+      await page.waitForFunction((index) => getComputedStyle(document.querySelectorAll(".story-beat")[index].firstElementChild).opacity === "1", index);
+      await page.waitForFunction(() => [...document.querySelectorAll("video")].filter((video) => !video.paused).length <= 1);
+      if (index === 1 && preference !== "reduce") await page.waitForFunction(() => document.querySelector(".story-beat:nth-child(2) video") && !document.querySelector(".story-beat:nth-child(2) video").paused);
+    }
+    assert.ok((await page.evaluate(() => window.alterCLS)) < 0.01, `CLS ${width}/${preference}: ${await page.evaluate(() => JSON.stringify(window.alterShifts))}`);
+    console.log(`CLS ${width}/${preference}: ${await page.evaluate(() => window.alterCLS)}`);
+    await page.screenshot({ path: `/tmp/alter-story-${width}-${preference}.png` });
+    if (preference !== "reduce") {
+      await page.getByRole("button", { name: "Motion: On", exact: true }).click();
+      await page.waitForFunction(() => !document.querySelector(".pin-spacer"));
+    }
+    await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
+    const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations);
+    assert.deepEqual(violations.map((item) => ({ id: item.id, targets: item.nodes.map((node) => node.target) })), []);
+    assert.deepEqual(errors, []);
+    await page.getByRole("link", { name: "Style guide", exact: true }).click();
+    await page.waitForFunction(() => location.pathname === "/style-guide");
+    assert.equal(await page.locator(".pin-spacer").count(), 0);
+    await page.close();
   }
 });
