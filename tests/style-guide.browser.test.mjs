@@ -338,3 +338,183 @@ test("hero crossfades over 600ms and only the active mood video plays", async ()
   await page.waitForFunction(() => getComputedStyle(document.querySelector(".hero-layer-night")).opacity === "1");
   await page.close();
 });
+
+test("collection filters combine, announce results and retain the active edit's stable order", async () => {
+  const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width: 1440, height: 1000 } });
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(`${base}/?hour=9#collection`);
+  const collection = page.locator("#collection");
+  const cards = collection.getByRole("button", { name: /^Quick view:/ });
+  await page.waitForFunction(() => document.querySelector(".product-card-button")?.getAttribute("aria-label") === "Quick view: Meridian Overcoat");
+  assert.equal(await cards.count(), 9);
+  assert.equal(await collection.getByRole("status").textContent(), "9 pieces");
+  assert.match(await collection.innerText(), /Day edit leads/i);
+  const originalDayOrder = await cards.evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label")));
+  assert.deepEqual(originalDayOrder.slice(0, 4), ["Meridian Overcoat", "Daylight Check Blazer", "Column Trouser", "Pearl & Gold Jewellery Edit"].map((name) => `Quick view: ${name}`));
+  await page.locator("header").getByRole("radio", { name: "Night", exact: true }).locator("..").click();
+  await page.waitForFunction(() => document.querySelector(".product-card-button")?.getAttribute("aria-label") === "Quick view: Nocturne Leather Jacket");
+  assert.deepEqual((await cards.evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label")))).slice(0, 5), ["Nocturne Leather Jacket", "Rue Leather Overshirt", "Hush Longline Coat", "Studio Blazer", "Midnight Ivory Set"].map((name) => `Quick view: ${name}`));
+  assert.match(await collection.innerText(), /Night edit leads/i);
+
+  const moods = collection.getByRole("group", { name: "Mood", exact: true });
+  const categories = collection.getByRole("group", { name: "Category", exact: true });
+  await moods.getByRole("button", { name: "Day edit", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  assert.equal(await cards.count(), 4);
+  assert.equal(await moods.getByRole("button", { name: "Day edit" }).getAttribute("aria-pressed"), "true");
+  assert.equal(await moods.getByRole("button", { name: "Day edit" }).evaluate((element) => getComputedStyle(element).outlineStyle), "solid");
+  await categories.getByRole("button", { name: /^outerwear$/i }).click();
+  assert.equal(await collection.getByRole("status").textContent(), "1 piece");
+  assert.equal(await cards.first().getAttribute("aria-label"), "Quick view: Meridian Overcoat");
+  await moods.getByRole("button", { name: "Night edit" }).click();
+  assert.equal(await collection.getByRole("status").textContent(), "3 pieces");
+  await categories.getByRole("button", { name: /^accessories$/i }).click();
+  assert.equal(await cards.count(), 0);
+  assert.equal(await collection.getByRole("status").textContent(), "0 pieces");
+  assert.equal(await collection.getByRole("heading", { name: "No pieces in this edit." }).isVisible(), true);
+  await collection.getByRole("button", { name: "Clear filters" }).click();
+  assert.equal(await cards.count(), 9);
+  assert.equal(await moods.getByRole("button", { name: "All", exact: true }).evaluate((element) => document.activeElement === element), true);
+  assert.equal(await categories.getByRole("button", { name: "All", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(await cards.first().getAttribute("aria-label"), "Quick view: Nocturne Leather Jacket");
+  assert.equal(await cards.first().evaluate((element) => getComputedStyle(element).transitionDuration), "0s");
+  assert.equal(await collection.locator("img").evaluateAll((elements) => elements.every((image) => image.loading === "lazy" && decodeURIComponent(image.getAttribute("src")).includes("/images/optimized/"))), true);
+  assert.deepEqual(errors, []);
+  await collection.screenshot({ path: "/tmp/alter-collection-night.png" });
+  await page.close();
+});
+
+test("quick view handles keyboard focus, required sizes, additions, persistence and dismissal", async () => {
+  const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width: 1440, height: 1000 } });
+  await page.goto(`${base}/?hour=9#collection`);
+  const card = page.getByRole("button", { name: "Quick view: Studio Blazer", exact: true });
+  await card.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Studio Blazer", exact: true });
+  await dialog.waitFor({ state: "visible" });
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  const add = dialog.getByRole("button", { name: "Add to bag", exact: true });
+  assert.equal(await close.evaluate((element) => document.activeElement === element), true);
+  assert.equal(await page.locator("body").evaluate((element) => element.style.overflow), "hidden");
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(await add.evaluate((element) => document.activeElement === element), true);
+  await page.keyboard.press("Tab");
+  assert.equal(await close.evaluate((element) => document.activeElement === element), true);
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".quick-view").count(), 0);
+  assert.equal(await card.evaluate((element) => document.activeElement === element), true);
+  assert.equal(await page.locator("body").evaluate((element) => element.style.overflow), "");
+
+  await card.click();
+  await add.click();
+  assert.equal(await dialog.getByRole("alert").textContent(), "Choose a size before adding to your bag.");
+  const sizes = dialog.getByRole("group", { name: "Size (required)", exact: true });
+  assert.equal(await sizes.evaluate((element) => document.activeElement === element), true);
+  assert.equal(await sizes.getAttribute("aria-invalid"), "true");
+  assert.equal(await page.locator("header").getByText("Bag (0)", { exact: true }).count(), 1);
+  await sizes.getByRole("radio", { name: "M", exact: true }).focus();
+  await page.keyboard.press("Space");
+  await dialog.getByRole("group", { name: "Colour", exact: true }).getByRole("radio", { name: "Ivory", exact: true }).locator("..").click();
+  assert.equal(await dialog.getByRole("alert").count(), 0);
+  await add.click();
+  assert.equal(await dialog.locator("[aria-live='polite']").textContent(), "Added: Studio Blazer, size M");
+  assert.equal(await page.locator("header").getByText("Bag (1)", { exact: true }).count(), 1);
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("alter-bag"))), { version: 1, count: 1, items: [{ productId: "studio-blazer", size: "M", colorToken: "ivory" }] });
+  await add.click();
+  assert.equal(await page.locator("header").getByText("Bag (2)", { exact: true }).count(), 1);
+  await dialog.screenshot({ path: "/tmp/alter-quick-view-desktop.png" });
+  await close.click();
+  assert.equal(await card.evaluate((element) => document.activeElement === element), true);
+  await card.click();
+  assert.equal(await sizes.getByRole("radio").evaluateAll((elements) => elements.every((element) => !element.checked)), true);
+  await page.mouse.click(16, 16); // Outside the desktop dialog's bounds: backdrop.
+  assert.equal(await page.locator(".quick-view").count(), 0);
+  assert.equal(await card.evaluate((element) => document.activeElement === element), true);
+  assert.equal(await page.locator("body").evaluate((element) => element.style.overflow), "");
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector("header")?.textContent.includes("Bag (2)"));
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("alter-bag")).items.length), 2);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const menu = page.getByRole("dialog", { name: "ALTER / Menu", exact: true });
+  assert.equal(await menu.getByRole("button", { name: "Bag (2)", exact: true }).isVisible(), true);
+  await menu.getByRole("button", { name: "Bag (2)", exact: true }).click();
+  assert.equal(await page.locator("body").evaluate((element) => element.style.overflow), "");
+  assert.equal(await page.getByRole("button", { name: "Menu", exact: true }).getAttribute("aria-expanded"), "false");
+  await page.close();
+});
+
+test("collection geometry, stock images and mobile quick views remain accessible in both moods", async () => {
+  for (const [hour, mood] of [[9, "day"], [19, "night"]]) {
+    const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width: 1440, height: 1000 } });
+    await page.goto(`${base}/?hour=${hour}#collection`);
+    await page.waitForFunction((mood) => document.querySelector("#collection .label") && document.documentElement.dataset.theme === mood && document.querySelector("#collection")?.textContent.includes(`${mood === "day" ? "Day" : "Night"} edit leads`), mood);
+    const collection = page.locator("#collection");
+    const grid = collection.locator(".collection-grid");
+    const imageBoxes = collection.locator(".product-card-image");
+    const first = await imageBoxes.nth(0).boundingBox();
+    const next = await imageBoxes.nth(1).boundingBox();
+    assert.ok(Math.abs(first.width - (next.width * 2 + 32)) < 1);
+    assert.ok(Math.abs(first.width / first.height - 4 / 5) < 0.01);
+    for (const image of await collection.locator("img").all()) await image.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => [...document.querySelectorAll("#collection img")].every((image) => image.complete && image.naturalWidth > 0));
+    await collection.screenshot({ path: `/tmp/alter-collection-${mood}.png` });
+    await page.setViewportSize({ width: 768, height: 1000 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `tablet ${mood}`);
+    assert.equal(await collection.locator(".product-card").first().evaluate((element) => getComputedStyle(element).gridColumnEnd), "span 4");
+    await page.setViewportSize({ width: 320, height: 812 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `small mobile ${mood}`);
+    assert.equal(await collection.locator(".product-card").first().evaluate((element) => getComputedStyle(element).gridColumnEnd), "span 6");
+    await page.setViewportSize({ width: 375, height: 812 });
+    assert.equal(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length), 12);
+    await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
+    const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations);
+    assert.deepEqual(violations.map((item) => ({ id: item.id, targets: item.nodes.map((node) => node.target) })), [], mood);
+    await collection.getByRole("button", { name: /^Quick view:/ }).first().click();
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor({ state: "visible" });
+    const bounds = await dialog.boundingBox();
+    assert.equal(bounds.width, 375);
+    assert.equal(bounds.height, 812);
+    assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth), true);
+    await page.screenshot({ path: `/tmp/alter-quick-view-mobile-${mood}.png` });
+    await dialog.getByRole("button", { name: "Add to bag" }).click();
+    const dialogViolations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations);
+    assert.deepEqual(dialogViolations.map((item) => ({ id: item.id, targets: item.nodes.map((node) => node.target) })), [], `dialog ${mood}`);
+    const scrollPosition = await page.evaluate(() => window.scrollY);
+    await page.mouse.wheel(0, 500);
+    assert.equal(await page.evaluate(() => window.scrollY), scrollPosition);
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator(".quick-view").count(), 0);
+    await page.close();
+  }
+});
+
+test("bag works with denied or malformed storage and derives restored count from valid items", async () => {
+  for (const [scenario, initialCount] of [["denied", 0], ["malformed", 0], ["invalid-items", 1]]) {
+    const context = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 375, height: 812 } });
+    await context.addInitScript((scenario) => {
+      if (scenario === "denied") {
+        for (const method of ["getItem", "setItem", "removeItem"]) Storage.prototype[method] = () => { throw new Error("Storage denied"); };
+      } else {
+        localStorage.setItem("alter-bag", scenario === "malformed" ? "{" : JSON.stringify({ version: 1, count: 999, items: [{ productId: "unknown", size: "M", colorToken: "ink" }, { productId: "pearl-gold-jewellery-edit", size: "One size", colorToken: "gold" }] }));
+      }
+    }, scenario);
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`${base}/?hour=9#collection`);
+    await page.waitForFunction((count) => document.querySelector("header")?.textContent.includes(`Bag (${count})`), initialCount);
+    await page.getByRole("button", { name: "Quick view: Pearl & Gold Jewellery Edit", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("radio", { name: "One size", exact: true }).locator("..").click();
+    await dialog.getByRole("button", { name: "Add to bag" }).click();
+    assert.equal(await page.locator("header").getByText(`Bag (${initialCount + 1})`, { exact: true }).count(), 1);
+    assert.equal(await dialog.locator("[aria-live='polite']").textContent(), "Added: Pearl & Gold Jewellery Edit, size One size");
+    await dialog.getByRole("button", { name: "Add to bag" }).click();
+    assert.equal(await page.locator("header").getByText(`Bag (${initialCount + 2})`, { exact: true }).count(), 1);
+    assert.deepEqual(errors, [], scenario);
+    await context.close();
+  }
+});
