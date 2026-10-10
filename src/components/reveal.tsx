@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useAnimationControls, useInView } from "framer-motion";
+import { m as motion, useAnimationControls, useInView } from "framer-motion";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { durations, easing } from "@/lib/motion";
 import { isMotionAllowed, useMotionAllowed } from "@/lib/use-motion-allowed";

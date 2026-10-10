@@ -1,5 +1,13 @@
 # ALTER
 
+## Project at a glance
+
+Fictional adaptive fashion brand / UX portfolio prototype. Live site: **[OWNER: add the deployed URL]**.
+
+- [Case study](docs/CASE_STUDY.md) — decisions, evidence and owner placeholders.
+- [Accessibility audit](docs/ACCESSIBILITY.md) — tested states, fixes and limits.
+- [Performance report](docs/PERFORMANCE.md) — measured production Lighthouse results and budgets.
+
 **Dress for the hour you're in.**
 
 ALTER is a fictional adaptive fashion and lifestyle brand for a UX design portfolio. Its foundation is minimal, editorial, urban and unisex: bright, airy Day and dark, monochrome Night.
@@ -17,7 +25,7 @@ npm run dev
 
 `npm run dev` and `npm run build` automatically generate optimized images through the `predev` and `prebuild` hooks. Existing WebP files newer than their source JPEGs are skipped, so repeat runs are fast. You can still run `npm run optimize-images` directly.
 
-Open `/` for the homepage or `/style-guide` for the design reference. No environment variables, credentials, database or external services are required. Fonts are bundled through `next/font/local`, so development and production builds do not fetch Google Fonts.
+Open `/` for the homepage or `/style-guide` for the design reference. No credentials, database or external services are required. Optional public metadata/indexing variables are documented in `.env.example`. Fonts are bundled through `next/font/local`, so development and production builds do not fetch Google Fonts. Preloaded WOFF2 files preserve the brand typefaces; Inter Tight uses its regular 400 weight, subset to Latin/Latin Extended, punctuation and currency glyphs for this English interface. Unused variable-weight axes are omitted from the web file. Original TTF sources and OFL licences remain in `src/fonts`; Instrument Serif and DM Mono TTFs also supply server-generated sharing artwork.
 
 ```sh
 npm run lint
@@ -29,7 +37,27 @@ npm run test:browser
 
 `typecheck` generates Next.js route types before running TypeScript. `npm test` checks time boundaries, phase labels, demo-hour parsing, bootstrap behavior, image/video metadata, product validity (including the no-branded-images rule), combined filters, stable adaptive sorting, USD formatting, asset paths and all 48 WebP outputs; run dev, build or the image optimizer first. The browser suite starts and stops its own production server on port 3100, so build first and leave that port free. It uses system Chromium at `/usr/bin/chromium`; set `CHROMIUM_PATH` to another installed Chromium binary if needed. It checks all eight style-guide theme/accent combinations with axe, homepage and quick-view accessibility in both moods, the minute clock, preferences and denied storage, mobile-menu and quick-view keyboard behavior, collection filters and empty states, required sizes, bag persistence, reduced motion, image loading, video playback/fallbacks and responsive layouts. Automated checks complement manual visual and screen-reader review.
 
-For production: run `npm run build`, then `npm start`. Vercel's default Next.js build command, `npm run build`, runs `prebuild` automatically, so fresh-clone deployments include the optimized images without a custom build command. Generated WebP files remain ignored by Git; the raw JPEGs remain versioned and unchanged.
+For production: copy `.env.example` to an ignored `.env.local` if configuring a custom origin, set `NEXT_PUBLIC_SITE_URL` to the real deployed origin, then run `npm run build` and `npm start`. On Vercel, `VERCEL_PROJECT_PRODUCTION_URL` supplies the canonical origin if the explicit URL is omitted. With neither, the reserved `https://alter.example` placeholder is used; set the actual origin before sharing publicly. Public environment settings are evaluated at build time: rebuild after changing them. Vercel's default Next.js build command, `npm run build`, runs `prebuild` automatically, so fresh-clone deployments include the optimized images without a custom build command. Generated WebP files remain ignored by Git; the raw JPEGs remain versioned and unchanged. `.env*` stays ignored except for the nonsecret `.env.example`.
+
+### Release and sharing
+
+The default fictional-site policy is **noindex, nofollow**, including an `X-Robots-Tag` header for every route/asset, blocked crawling in `robots.txt`, and an empty sitemap. Set exactly `NEXT_PUBLIC_ALLOW_INDEXING=true` and rebuild to enable indexing for `/` and `/credits`. `/style-guide` always remains noindex, nofollow, blocked in robots and omitted from the sitemap. Robots directives are requests to cooperating crawlers, not access control or a guarantee that an already indexed URL disappears.
+
+The root metadata supplies an origin, canonical URLs, title template, description, Open Graph/Twitter cards and light/dark browser theme colours. `/opengraph-image` is prerendered at 1200×630 using the unbranded editorial-bw-suit photo, Instrument Serif lettering and Sharp compositing; `/icon` renders an ALTER A mark. Custom 404 and error boundaries use the same tokens. Native dialogs expose a loading status only while their deferred payload is needed; there is no unnecessary page-wide loading screen.
+
+`/credits` lists all 16 original photos, seven clips and their poster stills, with the supplied Pexels handles/IDs. The owner must fill in the seven video creator names; no identities or profile URLs are guessed. Photos are concept references, not evidence of manufactured products.
+
+Both indexing variants have production smoke tests. To repeat the opt-in test locally:
+
+```sh
+NEXT_PUBLIC_ALLOW_INDEXING=true npm run build
+NEXT_PUBLIC_ALLOW_INDEXING=true node --test tests/indexing.smoke.mjs
+# Restore the default build before running the normal browser suite.
+NEXT_PUBLIC_ALLOW_INDEXING=false npm run build
+npm run test:browser
+```
+
+Dependencies remain pinned. `npm audit` findings and production-only results are recorded in the performance report; no forced major upgrades are applied.
 
 ## Design decisions and tokens
 
@@ -112,7 +140,7 @@ The collection reuses `.canvas` and the 12-column `.editorial-grid`: two cards a
 
 Each card opens a native quick-view dialog with the original image description, garment details, labelled colour choices and a required size group. Missing size selection shows an inline error and focuses that group. The modal shares the header's focus-wrap and scroll-lock helpers, closes with Escape, Close or a desktop backdrop click, and returns focus to its opening card. On mobile it fills the viewport and scrolls internally. Successful additions announce the piece and size inside the dialog for five seconds.
 
-The shared bag store in `src/lib/bag.ts` persists `{ version: 1, count, items }` under **`alter-bag`**. Each addition records a `productId`, `size` and palette `colorToken`; adding the same variant twice counts as two items. Restored entries are validated against the catalog, and the count is derived from valid items. Malformed or denied storage falls back to memory for the current page session. Bag counters in the header and mobile menu stay in sync; on the homepage they scroll to Collection. On the style guide they display the count only. This is a portfolio interaction with no checkout or payment flow.
+The shared bag store in `src/lib/bag.ts` persists `{ version: 1, count, items }` under **`alter-bag`**. Each addition records a `productId`, `size` and palette `colorToken`; adding the same variant twice counts as two items. Restored entries are validated against the catalog, and the count is derived from valid items. Malformed or denied storage falls back to memory for the current page session. Bag counters in the header and mobile menu stay in sync; on the homepage they scroll to Collection, and on secondary pages they navigate to the homepage collection. This is a portfolio interaction with no checkout or payment flow.
 
 ## Motion system
 
@@ -126,7 +154,7 @@ Theme requests share the existing theme store. On the homepage with motion allow
 
 Story keeps all three text beats in normal DOM and reading order. Desktop pins only the large `behind-the-scenes-shoot` media beside naturally scrolling text; mobile is stacked. The second beat pairs with `boutique-hands-sweaters`. GSAP/ScrollTrigger loads near Story, uses transform pinning and removes its trigger/spacer on unmount, viewport changes or disabled motion. There is no wheel, touch or keyboard interception. All three beats remain readable without an overlapping text timeline.
 
-`BackgroundVideo` now shares motion preferences and a visibility coordinator. Non-priority clips defer their source until selected in the viewport. Of active, visible decorative clips, the one closest to the viewport centre plays; the others pause, retaining their frames. The smaller Story insert takes priority when at least 60% visible, so the pinned background pauses during that beat. Dusk temporarily pauses other footage. Visibility changes, responsive replacements and unmounts clean up observers, playback entries and animation-frame work. Posters remain the fallback for failed or rejected playback.
+`BackgroundVideo` shares motion preferences and a visibility coordinator. The native player is imported only near view when motion and data preferences permit it; every clip defers its source until selected in the viewport. Hero playback waits until the initial page load plus 500ms so the prioritized poster and fonts can paint first. Below-the-fold posters and product images also wait until near view. Framer Motion uses `LazyMotion` with the small `domAnimation` feature set; quick-view and demo bodies are separate chunks inside immediate accessible dialog shells. Of active, visible decorative clips, the one closest to the viewport centre plays; the others pause, retaining their frames. The smaller Story insert takes priority when at least 60% visible, so the pinned background pauses during that beat. Dusk temporarily pauses other footage. Visibility changes, responsive replacements and unmounts clean up observers, playback entries and animation-frame work. Posters remain the fallback for failed or rejected playback.
 
 The browser suite covers first-load exclusion and midpoint timing for dusk, automatic hour boundaries, rapid toggles, failed media, preference persistence/denied storage, reduced-motion final states, parallax coverage, card focus, Story reading order, trigger cleanup and CLS. `node scripts/check-hero-contrast.mjs` is an optional audit requiring ffmpeg; temporary decoded frames are removed automatically. See [the baseline performance comparison and CLS measurements](docs/motion-performance.md).
 
@@ -217,7 +245,7 @@ const textures = getVideos({ role: "texture", mood: "night", orientation: "lands
 
 `BackgroundVideo` accepts `id`, optional `portraitId`, `className`, `overlay` (`none`, `light`, `dark`; default `dark`), `priority` (default `false`) and `active` (default `true`). Below 768px, a supplied portrait ID switches both the clip and poster; a non-portrait alternate is rejected. CSS reserves the correct aspect ratio before hydration. The video is muted, looping, inline, hidden from assistive technology and has no controls or focus stop. It plays only while active, intersecting the viewport and the document is visible, pauses when hidden, and retains its poster if autoplay is rejected or media fails. The first successful playback fades over the poster. Priority changes active video preload from `metadata` to `auto` and makes the poster load eagerly; it does not bypass visibility or preference checks. Inactive layers preload no video and retain paused frames for crossfades.
 
-Before preferences are checked, server output contains only the responsive poster. System reduced motion, Motion: Off or the browser's Save-Data flag prevents video mounting and MP4 requests. Changes to those preferences are honored while the page is open. A browser without IntersectionObserver retains the poster rather than starting uncontrolled playback.
+Before preferences are checked, the hero server output contains only the responsive poster; below-the-fold frames reserve space and request posters near view. System reduced motion, Motion: Off or the browser's Save-Data flag prevents video mounting and MP4 requests. Changes to those preferences are honored while the page is open. A browser without IntersectionObserver retains the poster rather than starting uncontrolled playback.
 
 For overlay text, pair **Ivory text with `dark`** and **Ink text with `light`**, regardless of the theme. Both gradients use existing Ink/Ivory tokens, with minimum opacity chosen to exceed WCAG AA normal-text contrast even over the worst-case white or black frame. Position readable text as a sibling above the decorative component, not inside its `aria-hidden` wrapper. `none` preserves unaltered footage in the motion-library gallery and requires separate contrast treatment if text is added later.
 
