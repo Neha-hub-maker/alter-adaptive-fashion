@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { HomeHero } from "@/components/home-hero";
 import { CollectionSection } from "@/components/collection-section";
 import { StorySection } from "@/components/story-section";
 
-export const metadata: Metadata = { title: "ALTER - Dress for the hour you're in." };
+export const metadata = { ...pageMetadata("Dress for the hour you're in.", "/"), title: { absolute: "Dress for the hour you're in. | ALTER" } };
 
 export default function HomePage() {
   return (

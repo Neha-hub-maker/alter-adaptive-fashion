@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { BackgroundVideo } from "@/components/background-video";
 import { Reveal } from "@/components/reveal";
 import { useMotionAllowed } from "@/lib/use-motion-allowed";
@@ -11,12 +11,17 @@ export const storyBeats = [
   { title: "Style without a dividing line", text: "ALTER is unisex because ease, expression and good design belong to everyone. Choose a shape for how it feels on you, beyond a gendered label." },
 ] as const;
 
+function subscribeDesktop(callback: () => void) { const query = window.matchMedia("(min-width: 768px)"); query.addEventListener("change", callback); return () => query.removeEventListener("change", callback); }
+function desktopSnapshot() { return window.matchMedia("(min-width: 768px)").matches; }
+function serverDesktopSnapshot() { return false; }
+
 export function StorySection() {
   const ref = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const allowed = useMotionAllowed();
+  const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, serverDesktopSnapshot);
   useEffect(() => {
-    if (!allowed || !window.IntersectionObserver) return;
+    if (!allowed || !desktop || !window.IntersectionObserver) return;
     let disposed = false;
     let revert: (() => void) | undefined;
     const observer = new IntersectionObserver(([entry]) => {
@@ -41,7 +46,7 @@ export function StorySection() {
     }, { rootMargin: "300px" });
     if (ref.current) observer.observe(ref.current);
     return () => { disposed = true; observer.disconnect(); revert?.(); };
-  }, [allowed]);
+  }, [allowed, desktop]);
   return <section ref={ref} id="story" aria-labelledby="story-title" className="canvas guide-block story-section">
     <Reveal className="mb-6"><p className="label text-muted mb-2">02 / Story</p><h2 id="story-title">A wardrobe that moves with you.</h2><p className="text-small text-muted mt-3">Fictional brand and concept for a UX portfolio project.</p></Reveal>
     <div className="editorial-grid story-sequence">

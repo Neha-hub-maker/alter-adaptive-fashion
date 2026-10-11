@@ -12,7 +12,7 @@ export function MoodControl({ compact = false }: { compact?: boolean }) {
       <legend className={compact ? "sr-only" : "label mb-2 text-muted"}>Mood</legend>
       <div className="flex flex-wrap gap-1">
         {themeModes.map((value) => (
-          <label className={`choice ${compact ? "label" : ""}`} key={value}>
+          <label data-mode-choice={value} className={`choice mood-choice ${compact ? "label" : ""}`} key={value}>
             <input className="sr-only" type="radio" aria-label={value[0].toUpperCase() + value.slice(1)} name={`${id}-theme`} value={value} checked={mode === value} onChange={() => setThemeMode(value)} />
             <span className="capitalize">{value}</span>
             {value === "auto" && mode === "auto" && <span aria-hidden="true" className="auto-mood"><span className="day-edit">Day</span><span className="night-edit">Night</span></span>}

@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { demoPresets, type DemoPreset } from "@/lib/adaptation";
 import { exitDemo, resetProfile, setPersonalization, startDemo, useProfile } from "@/lib/profile";
 import { openDialog, trapDialogFocus } from "@/lib/dialog";
+
+const DemoPanelContent = dynamic(() => import("./demo-panel-content"), { ssr: false, loading: () => <p className="py-3" role="status">Loading demo presets…</p> });
 
 export function DemoBar() {
   const { demo, ready } = useProfile();
@@ -29,8 +32,7 @@ export function AdaptiveControls() {
     <p className="adaptive-confirmation text-small" role="status" aria-live="polite" aria-atomic="true">{confirmation}</p>
     <dialog ref={dialog} className="adaptive-dialog" aria-labelledby="adaptive-demo-title" onCancel={(event) => { event.preventDefault(); setOpen(false); }} onKeyDown={trapDialogFocus}>
       <div className="flex items-center justify-between gap-2 mb-3"><h2 id="adaptive-demo-title" className="text-h3">See how ALTER adapts</h2><button type="button" className="choice" onClick={() => setOpen(false)}>Close demo panel</button></div>
-      <p className="text-small">Your theme and hour shape the current edit. Viewed pieces gently influence which categories lead; the data stays only on your device. These presets are temporary previews and never overwrite your saved profile.</p>
-      <ul className="mt-3 flex flex-col gap-2">{(Object.keys(demoPresets) as DemoPreset[]).map((preset) => <li key={preset}><button type="button" className="choice w-full" onClick={() => choose(preset)}>{demoPresets[preset].label}</button></li>)}</ul>
+      {open && <DemoPanelContent onChoose={choose} />}
     </dialog>
   </div>;
 }

@@ -116,8 +116,8 @@ function heroFigure(page) {
 test("visible video plays and fades in, then pauses off-screen", async () => {
   const page = await browser.newPage({ reducedMotion: "no-preference", viewport: { width: 1280, height: 900 } });
   await page.goto(`${base}/style-guide`);
-  await page.waitForFunction(() => document.querySelectorAll("video").length === 7);
-  assert.equal(await page.locator("video").evaluateAll((elements) => elements.every((video) => video.paused)), true);
+  // The motion library is below the fold: its player elements load near view.
+  assert.equal(await page.locator("video").count(), 0);
   const figure = heroFigure(page);
   await figure.locator(".background-video").evaluate((element) => element.scrollIntoView({ block: "center" }));
   const video = figure.locator("video");
@@ -141,16 +141,18 @@ test("portrait source, poster and reserved ratio switch precisely at 768px", asy
   await page.waitForFunction(() => document.querySelector('figure:has(video[src="/video/hero-day-street-walk-portrait.mp4"])'));
   const video = figure.locator("video");
   assert.equal(await video.getAttribute("src"), "/video/hero-day-street-walk-portrait.mp4");
-  assert.equal(await video.getAttribute("poster"), "/video/hero-day-street-walk-portrait-poster.jpg");
+  await page.waitForFunction(() => [...document.querySelectorAll("video")].some((v) => decodeURIComponent(v.poster).includes("hero-day-street-walk-portrait-poster.jpg")));
+  assert.equal(new URL(await video.getAttribute("poster"), base).searchParams.get("url"), "/video/hero-day-street-walk-portrait-poster.jpg");
   const frame = figure.locator(".background-video");
   const box = await frame.boundingBox();
   assert.ok(Math.abs(box.width / box.height - 9 / 16) < 0.01);
-  await page.waitForFunction(() => [...document.images].some((image) => image.currentSrc.endsWith("/hero-day-street-walk-portrait-poster.jpg") && image.complete));
+  await page.waitForFunction(() => [...document.images].some((image) => decodeURIComponent(image.currentSrc).includes("/hero-day-street-walk-portrait-poster.jpg") && image.complete));
   assert.deepEqual(await frame.boundingBox(), box);
   await page.setViewportSize({ width: 768, height: 900 });
   await figure.locator(".background-video").evaluate((element) => element.scrollIntoView({ block: "center" }));
   await page.waitForFunction(() => document.querySelector('video[src="/video/hero-day-street-walk.mp4"]'));
-  assert.equal(await video.getAttribute("poster"), "/video/hero-day-street-walk-poster.jpg");
+  await page.waitForFunction(() => [...document.querySelectorAll("video")].some((v) => decodeURIComponent(v.poster).includes("hero-day-street-walk-poster.jpg")));
+  assert.equal(new URL(await video.getAttribute("poster"), base).searchParams.get("url"), "/video/hero-day-street-walk-poster.jpg");
   const wide = await frame.boundingBox();
   assert.ok(Math.abs(wide.width / wide.height - 16 / 9) < 0.01);
   await page.close();
@@ -171,9 +173,12 @@ test("reduced motion and Save-Data render posters without any MP4 requests", asy
     page.on("request", (request) => { if (request.url().endsWith(".mp4")) requests.push(request.url()); });
     await page.goto(`${base}/style-guide`);
     await page.getByRole("heading", { name: "A quiet rhythm." }).scrollIntoViewIfNeeded();
+    for (const frame of await page.locator("section[aria-labelledby='motion-title'] .background-video").all()) {
+      await frame.scrollIntoViewIfNeeded();
+      await frame.locator("picture img").waitFor();
+    }
     const posters = page.locator("section[aria-labelledby='motion-title'] picture img");
     assert.equal(await posters.count(), 7);
-    for (const poster of await posters.all()) await poster.scrollIntoViewIfNeeded();
     await page.waitForFunction(() => [...document.querySelectorAll(".background-video img")].every((image) => image.complete && image.naturalWidth > 0));
     assert.equal(await page.locator("video").count(), 0, preference);
     assert.deepEqual(requests, [], preference);
@@ -313,13 +318,14 @@ test("homepage themes remain accessible, use the requested media and switch inst
     page.on("request", (request) => { if (request.url().endsWith(".mp4")) requests.push(request.url()); });
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`${base}/?hour=${hour}`);
-    assert.equal(await page.title(), "ALTER - Dress for the hour you're in.");
+    assert.equal(await page.title(), "Dress for the hour you're in. | ALTER");
     assert.equal(await page.locator("html").getAttribute("data-theme"), mood);
     assert.equal(await page.locator("video").count(), 0);
     assert.equal(await page.locator(".hero-layer").first().evaluate((element) => getComputedStyle(element).transitionDuration), "0s");
     assert.equal(await page.getByRole("link", { name: "Explore the collection" }).getAttribute("href"), "#collection");
     assert.equal(await page.getByRole("link", { name: "Our story", exact: true }).getAttribute("href"), "#story");
-    assert.ok(await page.locator(".hero-layer-night .hero-night-photo img").getAttribute("src").then((src) => src.includes("street-night-allwhite")));
+    if (mood === "night") assert.ok(await page.locator(".hero-layer-night .hero-night-photo img").getAttribute("src").then((src) => src.includes("street-night-allwhite")));
+    else assert.equal(await page.locator(".hero-night-photo img").count(), 0);
     await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
     const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations);
     assert.deepEqual(violations.map((item) => ({ id: item.id, nodes: item.nodes.map((node) => node.target) })), []);
@@ -412,6 +418,7 @@ test("quick view handles keyboard focus, required sizes, additions, persistence 
   await dialog.waitFor({ state: "visible" });
   const close = dialog.getByRole("button", { name: "Close", exact: true });
   const add = dialog.getByRole("button", { name: "Add to bag", exact: true });
+  await add.waitFor({ state: "visible" });
   assert.equal(await close.evaluate((element) => document.activeElement === element), true);
   assert.equal(await page.locator("body").evaluate((element) => element.style.overflow), "hidden");
   await page.keyboard.press("Shift+Tab");
@@ -716,6 +723,7 @@ test("hour picks show four explained cards, open quick view and re-rank without 
   await rail.getByRole("button", { name: "Quick view: Column Trouser", exact: true }).focus();
   await page.keyboard.press("Enter");
   await page.getByRole("dialog").waitFor({ state: "visible" });
+  await page.getByRole("dialog").getByRole("heading", { name: "Column Trouser", exact: true }).waitFor();
   assert.equal(await page.getByRole("dialog").getByRole("heading", { name: "Column Trouser", exact: true }).count(), 1);
   await page.keyboard.press("Escape");
   await rail.getByRole("button", { name: "Quick view: Column Trouser", exact: true }).focus();
@@ -798,6 +806,7 @@ test("demo dialog is keyboard accessible and temporary views/settings restore re
   await trigger.focus(); await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "See how ALTER adapts", exact: true });
   await dialog.waitFor({ state: "visible" });
+  await dialog.getByRole("button", { name: "Morning minimalist", exact: true }).waitFor();
   await dialog.getByRole("button", { name: "Close demo panel", exact: true }).focus();
   await page.keyboard.press("Shift+Tab");
   assert.equal(await dialog.getByRole("button", { name: "Morning minimalist", exact: true }).evaluate((element) => element === document.activeElement), true);
@@ -891,5 +900,201 @@ test("adaptive hydration reserves layout, accents remain accessible and denied s
   assert.equal(await page.locator(".recent-slot").isVisible(), false);
   await page.getByRole("button", { name: "Clear my data", exact: true }).click();
   assert.match(await page.locator(".adaptive-confirmation").innerText(), /cleared for this page/);
+  await page.close();
+});
+
+async function assertAxe(page, state) {
+  if (!await page.evaluate(() => Boolean(window.axe))) await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
+  const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } })).violations);
+  assert.deepEqual(violations.map((item) => ({ id: item.id, nodes: item.nodes.map((node) => node.target) })), [], state);
+}
+
+test("release accessibility matrix covers page, menu, size error, demo and empty states in eight palettes", async () => {
+  for (const theme of ["day", "night"]) for (const accent of ["petrol", "magenta", "camel", "gold"]) {
+    const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width: 375, height: 900 } });
+    await savedDevice(page, { "alter-theme": theme, "alter-accent": accent });
+    await page.goto(`${base}/?hour=13`);
+    await page.waitForFunction(() => document.querySelector(".hour-picks").dataset.ready === "true");
+    const firstCard = page.locator(".collection-grid button").first();
+    const descriptions = await firstCard.evaluate((n) => n.getAttribute("aria-describedby").split(" ").map((id) => document.getElementById(id)?.textContent).join(" "));
+    assert.match(descriptions, /\$[\d,.]+ \/ (day|night) edit\./);
+    await assertAxe(page, `${theme}/${accent}: homepage`);
+    await page.getByRole("button", { name: "Menu", exact: true }).click();
+    await assertAxe(page, `${theme}/${accent}: mobile menu`);
+    await page.keyboard.press("Escape");
+    await page.locator(".collection-grid button").first().click();
+    await page.getByRole("button", { name: "Add to bag", exact: true }).click();
+    await assertAxe(page, `${theme}/${accent}: quick view with size error`);
+    await page.keyboard.press("Escape");
+    await page.locator(".collection-filters").getByRole("group", { name: "Mood", exact: true }).getByRole("button", { name: "Night edit" }).click();
+    await page.locator(".collection-filters").getByRole("group", { name: "Category", exact: true }).getByRole("button", { name: /^accessories$/i }).click();
+    await assertAxe(page, `${theme}/${accent}: empty filter`);
+    await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+    await page.getByRole("button", { name: "See how ALTER adapts", exact: true }).click();
+    await assertAxe(page, `${theme}/${accent}: demo panel`);
+    await page.getByRole("button", { name: "Returning, outerwear fan", exact: true }).click();
+    await page.getByRole("button", { name: "Menu", exact: true }).click();
+    await page.locator("#alter-menu-panel").getByRole("radio", { name: theme, exact: false }).locator("..").click();
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator("html").getAttribute("data-accent"), accent);
+    await assertAxe(page, `${theme}/${accent}: active demo`);
+    await page.goto(`${base}/style-guide`);
+    await assertAxe(page, `${theme}/${accent}: style guide`);
+    await page.close();
+  }
+});
+
+test("release smoke: branded 404, credits, sharing metadata and default noindex routes", async () => {
+  const page = await browser.newPage({ reducedMotion: "reduce" });
+  const missing = await page.goto(`${base}/this-page-does-not-exist`);
+  assert.equal(missing.status(), 404);
+  assert.equal(await page.getByRole("heading", { level: 1, name: "This hour slipped away." }).count(), 1);
+  await page.getByRole("link", { name: "Back to ALTER", exact: true }).click();
+  await page.waitForFunction(() => document.title.includes(" | ALTER"));
+  assert.match(await page.title(), /Dress for the hour.*\| ALTER/);
+  assert.equal(await page.locator('meta[name="robots"]').getAttribute("content"), "noindex, nofollow");
+  assert.ok(await page.locator('link[rel="canonical"]').getAttribute("href"));
+  assert.equal(await page.locator('meta[property="og:image:width"]').getAttribute("content"), "1200");
+  assert.equal(await page.locator('meta[property="og:image:height"]').getAttribute("content"), "630");
+  assert.equal(await page.locator('meta[name="twitter:card"]').getAttribute("content"), "summary_large_image");
+  assert.equal(await page.locator('meta[name="theme-color"]').count(), 2);
+  const social = await fetch(`${base}/opengraph-image`); const icon = await fetch(`${base}/icon`);
+  assert.equal(social.status, 200); assert.equal(icon.status, 200);
+  assert.match(social.headers.get("content-type"), /image\/png/);
+  const dimensions = Buffer.from(await social.arrayBuffer());
+  assert.equal(dimensions.readUInt32BE(16), 1200); assert.equal(dimensions.readUInt32BE(20), 630);
+  const { default: sharp } = await import("sharp");
+  const photoStats = await sharp(dimensions).extract({ left: 640, top: 0, width: 560, height: 630 }).stats();
+  const letteringStats = await sharp(dimensions).extract({ left: 0, top: 0, width: 640, height: 630 }).stats();
+  assert.ok(photoStats.channels[0].stdev > 25, "social preview contains the photo, not a blank area");
+  assert.ok(letteringStats.channels[0].mean < 100 && letteringStats.channels[0].max > 220, "wordmark has light text on Ink");
+  assert.equal(social.headers.get("x-robots-tag"), "noindex, nofollow");
+  await page.getByRole("link", { name: "Credits", exact: true }).click();
+  await page.waitForURL(`${base}/credits`);
+  assert.equal(new URL(page.url()).pathname, "/credits");
+  assert.equal(await page.locator(".credit-list li").count(), 23);
+  assert.equal(await page.getByText("Creator: to be added by the site owner", { exact: true }).count(), 7);
+  await assertAxe(page, "credits");
+  const robots = await fetch(`${base}/robots.txt`); const sitemap = await fetch(`${base}/sitemap.xml`);
+  assert.match(await robots.text(), /Disallow: \/\s/);
+  assert.doesNotMatch(await sitemap.text(), /<loc>/);
+  assert.equal(robots.headers.get("x-robots-tag"), "noindex, nofollow");
+  await page.goto(`${base}/style-guide`);
+  assert.equal(await page.locator('meta[name="robots"]').getAttribute("content"), "noindex, nofollow");
+  await page.close();
+});
+
+test("release reflow, mobile targets, heading order, landmarks and enlarged text remain usable", async () => {
+  for (const path of ["/", "/style-guide", "/credits"]) {
+    const page = await browser.newPage({ reducedMotion: "reduce", viewport: { width: 320, height: 900 } });
+    await page.goto(`${base}${path}`);
+    await page.waitForFunction(() => document.documentElement.dataset.personalization !== undefined);
+    assert.equal(await page.locator("main").count(), 1); assert.equal(await page.locator("header").count(), 1); assert.equal(await page.locator("footer").count(), 1);
+    assert.equal(await page.locator("h1").count(), 1);
+    const headings = await page.locator("main h1,main h2,main h3,main h4").evaluateAll((nodes) => nodes.map((n) => Number(n.tagName.slice(1))));
+    for (let i = 1; i < headings.length; i++) assert.ok(headings[i] <= headings[i - 1] + 1, `${path}: skipped heading`);
+    await page.keyboard.press("Tab"); assert.equal(await page.getByRole("link", { name: "Skip to content" }).evaluate((n) => n === document.activeElement), true);
+    await page.keyboard.press("Enter"); assert.equal(await page.locator("main").evaluate((n) => n === document.activeElement), true);
+    const targets = await page.locator("a,button,label.choice").evaluateAll((nodes) => nodes.filter((n) => n.getClientRects().length && getComputedStyle(n).visibility !== "hidden" && !n.closest("dialog:not([open])") && !n.classList.contains("skip-link")).map((n) => { const b = n.getBoundingClientRect(); return { name: n.textContent.trim(), width: b.width, height: b.height }; }));
+    for (const t of targets) assert.ok(t.width >= 44 && t.height >= 44, `${path}: ${JSON.stringify(t)}`);
+    await page.addStyleTag({ content: "* { line-height: 1.5 !important; letter-spacing: .12em !important; word-spacing: .16em !important; } p { margin-bottom: 2em !important; }" });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${path}: text spacing overflow`);
+    await page.screenshot({ path: `/tmp/alter-spacing-${path === "/" ? "home" : path.slice(1)}.png`, fullPage: true });
+    // 200% text sizing is separate from the 320px reflow / effective 200% viewport check.
+    await page.setViewportSize({ width: 640, height: 900 });
+    await page.addStyleTag({ content: "html { font-size: 200%; }" });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${path}: enlarged text overflow`);
+    await page.getByRole("button", { name: "Menu", exact: true }).click();
+    await page.getByRole("button", { name: "Close menu", exact: true }).click();
+    await page.getByRole("button", { name: "See how ALTER adapts", exact: true }).click();
+    assert.equal(await page.getByRole("button", { name: "Close demo panel", exact: true }).isVisible(), true);
+    assert.equal(await page.getByRole("dialog").evaluate((n) => n.scrollWidth <= n.clientWidth), true, `${path}: enlarged dialog overflow`);
+    await page.keyboard.press("Escape");
+    await page.close();
+  }
+});
+
+test("lazy quick-view loading traps focus immediately and keeps the dialog stable as content arrives", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const files = await readdir(".next/static/chunks");
+  const candidates = await Promise.all(files.filter((file) => file.endsWith(".js")).map(async (file) => ({ file, content: await readFile(`.next/static/chunks/${file}`, "utf8") })));
+  const chunk = candidates.find(({ content }) => content.includes("Choose a size before adding to your bag."));
+  assert.ok(chunk, "quick-view content has its own compiled chunk");
+  const page = await browser.newPage({ reducedMotion: "reduce" });
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  await page.route(`**/_next/static/chunks/${chunk.file}`, async (route) => { await pending; await route.continue(); });
+  await page.goto(`${base}/?hour=9`);
+  const card = page.locator(".collection-grid button").first();
+  await card.focus(); await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("status").waitFor();
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  assert.equal(await close.evaluate((n) => n === document.activeElement), true);
+  const before = await dialog.boundingBox();
+  const closeBefore = await close.boundingBox();
+  await page.waitForTimeout(700);
+  release();
+  await dialog.getByRole("button", { name: "Add to bag", exact: true }).waitFor();
+  assert.deepEqual(await dialog.boundingBox(), before);
+  assert.deepEqual(await close.boundingBox(), closeBefore);
+  await close.focus();
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(await dialog.getByRole("button", { name: "Add to bag", exact: true }).evaluate((n) => n === document.activeElement), true);
+  await page.keyboard.press("Tab");
+  assert.equal(await close.evaluate((n) => n === document.activeElement), true);
+  await page.keyboard.press("Escape");
+  assert.equal(await card.evaluate((n) => n === document.activeElement), true);
+  release();
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator(".quick-view").count(), 0);
+  await page.close();
+
+  const cancelled = await browser.newPage({ reducedMotion: "reduce" });
+  let finish;
+  const deferred = new Promise((resolve) => { finish = resolve; });
+  await cancelled.route(`**/_next/static/chunks/${chunk.file}`, async (route) => { await deferred; await route.continue(); });
+  await cancelled.goto(`${base}/?hour=9`);
+  const trigger = cancelled.locator(".collection-grid button").first();
+  await trigger.click();
+  await cancelled.getByRole("dialog").getByRole("status").waitFor();
+  await cancelled.keyboard.press("Escape");
+  assert.equal(await trigger.evaluate((n) => n === document.activeElement), true);
+  finish();
+  await cancelled.waitForTimeout(200);
+  assert.equal(await cancelled.locator(".quick-view").count(), 0);
+  await cancelled.close();
+});
+
+test("decorative assets stay deferred until view and mobile never imports desktop pinning", async () => {
+  const page = await browser.newPage({ reducedMotion: "no-preference", viewport: { width: 375, height: 812 } });
+  const requests = [];
+  page.on("request", (r) => requests.push(decodeURIComponent(r.url())));
+  await page.goto(`${base}/?hour=9`);
+  await page.waitForFunction(() => [...document.querySelectorAll("video")].some((v) => !v.paused));
+  assert.ok(requests.some((r) => r.endsWith("hero-day-street-walk-portrait.mp4")));
+  assert.equal(requests.some((r) => r.includes("behind-the-scenes-shoot") || r.includes("boutique-hands-sweaters") || r.includes("/images/optimized/")), false);
+  assert.equal(await page.locator('.product-card-image img').count(), 0);
+  await page.locator("#story").scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => [...document.querySelectorAll("#story img")].some((i) => i.complete && i.naturalWidth));
+  assert.equal(await page.locator("[data-pinned]").count(), 0);
+  // GSAP is excluded at the desktop media gate, rather than loading an unused pinning library.
+  const { readdir, readFile } = await import("node:fs/promises");
+  const chunks = await readdir(".next/static/chunks");
+  const gsapChunks = [];
+  for (const file of chunks.filter((file) => file.endsWith(".js"))) if ((await readFile(`.next/static/chunks/${file}`, "utf8")).includes("pinReparent")) gsapChunks.push(file);
+  assert.ok(gsapChunks.length > 0);
+  assert.equal(requests.some((r) => gsapChunks.some((file) => r.includes(file))), false);
+  await page.close();
+});
+
+test("mobile menu closing at the desktop breakpoint restores focus to a visible control", async () => {
+  const page = await browser.newPage({ viewport: { width: 375, height: 900 }, reducedMotion: "reduce" });
+  await page.goto(base);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.waitForFunction(() => !document.getElementById("alter-menu-panel").open);
+  assert.equal(await page.locator("header").getByRole("link", { name: "ALTER home", exact: true }).evaluate((n) => n === document.activeElement), true);
+  assert.equal(await page.locator("body").evaluate((n) => n.style.overflow), "");
   await page.close();
 });

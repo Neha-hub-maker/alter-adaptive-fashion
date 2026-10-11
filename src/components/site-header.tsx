@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { MoodControl } from "@/components/theme-controls";
 import { BagCounter } from "@/components/bag-counter";
@@ -10,6 +10,7 @@ import { startThemeClock } from "@/lib/theme";
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -35,14 +36,14 @@ export function SiteHeader() {
     if (event.key === "Escape") { event.preventDefault(); setOpen(false); return; }
     trapDialogFocus(event);
   };
-  const exploreCollection = () => document.getElementById("collection")?.scrollIntoView({ block: "start" });
+  const exploreCollection = () => { if (pathname !== "/") router.push("/#collection"); else document.getElementById("collection")?.scrollIntoView({ block: "start" }); };
 
   return (
     <>
       <a href="#main-content" className="skip-link">Skip to content</a>
       <header className="site-header">
         <div className="canvas flex h-full items-center justify-between gap-3">
-          <Link href="/" className="font-display text-h3 tracking-[-0.04em]" aria-label="ALTER home">ALTER</Link>
+          <Link href="/" className="inline-flex min-h-[44px] items-center font-display text-h3 tracking-[-0.04em]" aria-label="ALTER home">ALTER</Link>
           <div className="flex items-center gap-1 md:gap-2 lg:gap-4">
             <div className="hidden items-center gap-2 lg:gap-4 md:flex">
               <nav aria-label="Main navigation" className="flex gap-3 text-small">

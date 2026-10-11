@@ -1,0 +1,358 @@
+{
+  "measuredAt": "2026-10-10",
+  "build": "Next.js production, default noindex policy",
+  "browser": "Chromium 151",
+  "lighthouseVersion": "13.5.0",
+  "method": "Three cold-browser runs per route, warmed loopback server, mobile simulated throttling; no concurrent browser suite",
+  "settings": {
+    "formFactor": "mobile",
+    "throttlingMethod": "simulate",
+    "throttling": {
+      "rttMs": 150,
+      "throughputKbps": 1638.4,
+      "requestLatencyMs": 562.5,
+      "downloadThroughputKbps": 1474.5600000000002,
+      "uploadThroughputKbps": 675,
+      "cpuSlowdownMultiplier": 4
+    },
+    "screenEmulation": {
+      "mobile": true,
+      "width": 412,
+      "height": 823,
+      "deviceScaleFactor": 1.75,
+      "disabled": false
+    }
+  },
+  "runs": [
+    {
+      "route": "home",
+      "run": 1,
+      "fetchTime": "2026-10-10T18:42:14.642Z",
+      "path": "/?hour=13",
+      "score": {
+        "performance": 91,
+        "accessibility": 100,
+        "best-practices": 100,
+        "seo": 66
+      },
+      "lcpMs": 3458.1264000000006,
+      "cls": 0,
+      "tbtMs": 85.35920000000033,
+      "fcpMs": 910.5632,
+      "speedIndexMs": 1342.154585487483,
+      "resources": {
+        "total": {
+          "requests": 28,
+          "bytes": 1170321
+        },
+        "media": {
+          "requests": 1,
+          "bytes": 792191
+        },
+        "script": {
+          "requests": 15,
+          "bytes": 206808
+        },
+        "font": {
+          "requests": 3,
+          "bytes": 94399
+        },
+        "image": {
+          "requests": 2,
+          "bytes": 50396
+        },
+        "document": {
+          "requests": 1,
+          "bytes": 11474
+        },
+        "stylesheet": {
+          "requests": 2,
+          "bytes": 7925
+        },
+        "other": {
+          "requests": 4,
+          "bytes": 7128
+        },
+        "third-party": {
+          "requests": 0,
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "route": "home",
+      "run": 2,
+      "fetchTime": "2026-10-10T18:42:26.541Z",
+      "path": "/?hour=13",
+      "score": {
+        "performance": 94,
+        "accessibility": 100,
+        "best-practices": 100,
+        "seo": 66
+      },
+      "lcpMs": 3032.2102,
+      "cls": 0,
+      "tbtMs": 31,
+      "fcpMs": 916.1051,
+      "speedIndexMs": 1404.1344395129547,
+      "resources": {
+        "total": {
+          "requests": 28,
+          "bytes": 1170321
+        },
+        "media": {
+          "requests": 1,
+          "bytes": 792191
+        },
+        "script": {
+          "requests": 15,
+          "bytes": 206808
+        },
+        "font": {
+          "requests": 3,
+          "bytes": 94399
+        },
+        "image": {
+          "requests": 2,
+          "bytes": 50396
+        },
+        "document": {
+          "requests": 1,
+          "bytes": 11474
+        },
+        "stylesheet": {
+          "requests": 2,
+          "bytes": 7925
+        },
+        "other": {
+          "requests": 4,
+          "bytes": 7128
+        },
+        "third-party": {
+          "requests": 0,
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "route": "home",
+      "run": 3,
+      "fetchTime": "2026-10-10T18:42:37.920Z",
+      "path": "/?hour=13",
+      "score": {
+        "performance": 91,
+        "accessibility": 100,
+        "best-practices": 100,
+        "seo": 66
+      },
+      "lcpMs": 3449.296,
+      "cls": 0,
+      "tbtMs": 74.21299999999951,
+      "fcpMs": 911.1479999999999,
+      "speedIndexMs": 1412.311610681225,
+      "resources": {
+        "total": {
+          "requests": 28,
+          "bytes": 1170321
+        },
+        "media": {
+          "requests": 1,
+          "bytes": 792191
+        },
+        "script": {
+          "requests": 15,
+          "bytes": 206808
+        },
+        "font": {
+          "requests": 3,
+          "bytes": 94399
+        },
+        "image": {
+          "requests": 2,
+          "bytes": 50396
+        },
+        "document": {
+          "requests": 1,
+          "bytes": 11474
+        },
+        "stylesheet": {
+          "requests": 2,
+          "bytes": 7925
+        },
+        "other": {
+          "requests": 4,
+          "bytes": 7128
+        },
+        "third-party": {
+          "requests": 0,
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "route": "style-guide",
+      "run": 1,
+      "fetchTime": "2026-10-10T18:42:49.355Z",
+      "path": "/style-guide?hour=13",
+      "score": {
+        "performance": 98,
+        "accessibility": 100,
+        "best-practices": 100,
+        "seo": 69
+      },
+      "lcpMs": 2261.6002,
+      "cls": 0,
+      "tbtMs": 103.5,
+      "fcpMs": 911.6002000000001,
+      "speedIndexMs": 911.6002000000001,
+      "resources": {
+        "total": {
+          "requests": 24,
+          "bytes": 329577
+        },
+        "script": {
+          "requests": 14,
+          "bytes": 205635
+        },
+        "font": {
+          "requests": 3,
+          "bytes": 94399
+        },
+        "document": {
+          "requests": 1,
+          "bytes": 14490
+        },
+        "stylesheet": {
+          "requests": 2,
+          "bytes": 7925
+        },
+        "other": {
+          "requests": 4,
+          "bytes": 7128
+        },
+        "image": {
+          "requests": 0,
+          "bytes": 0
+        },
+        "media": {
+          "requests": 0,
+          "bytes": 0
+        },
+        "third-party": {
+          "requests": 0,
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "route": "style-guide",
+      "run": 2,
+      "fetchTime": "2026-10-10T18:43:01.091Z",
+      "path": "/style-guide?hour=13",
+      "score": {
+        "performance": 94,
+        "accessibility": 100,
+        "best-practices": 100,
+        "seo": 69
+      },
+      "lcpMs": 2914.8775500000006,
+      "cls": 0,
+      "tbtMs": 122.5,
+      "fcpMs": 911.2517,
+      "speedIndexMs": 911.2517,
+      "resources": {
+        "total": {
+          "requests": 24,
+          "bytes": 329577
+        },
+        "script": {
+          "requests": 14,
+          "bytes": 205635
+        },
+        "font": {
+          "requests": 3,
+          "bytes": 94399
+        },
+        "document": {
+          "requests": 1,
+          "bytes": 14490
+        },
+        "stylesheet": {
+          "requests": 2,
+          "bytes": 7925
+        },
+        "other": {
+          "requests": 4,
+          "bytes": 7128
+        },
+        "image": {
+          "requests": 0,
+          "bytes": 0
+        },
+        "media": {
+          "requests": 0,
+          "bytes": 0
+        },
+        "third-party": {
+          "requests": 0,
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "route": "style-guide",
+      "run": 3,
+      "fetchTime": "2026-10-10T18:43:12.462Z",
+      "path": "/style-guide?hour=13",
+      "score": {
+        "performance": 97,
+        "accessibility": 100,
+        "best-practices": 100,
+        "seo": 69
+      },
+      "lcpMs": 2563.3237499999996,
+      "cls": 0,
+      "tbtMs": 62,
+      "fcpMs": 908.8824999999999,
+      "speedIndexMs": 908.8824999999999,
+      "resources": {
+        "total": {
+          "requests": 24,
+          "bytes": 329577
+        },
+        "script": {
+          "requests": 14,
+          "bytes": 205635
+        },
+        "font": {
+          "requests": 3,
+          "bytes": 94399
+        },
+        "document": {
+          "requests": 1,
+          "bytes": 14490
+        },
+        "stylesheet": {
+          "requests": 2,
+          "bytes": 7925
+        },
+        "other": {
+          "requests": 4,
+          "bytes": 7128
+        },
+        "image": {
+          "requests": 0,
+          "bytes": 0
+        },
+        "media": {
+          "requests": 0,
+          "bytes": 0
+        },
+        "third-party": {
+          "requests": 0,
+          "bytes": 0
+        }
+      }
+    }
+  ]
+}
